@@ -3,9 +3,29 @@ import pickle
 import numpy as np
 import torch
 from copy import deepcopy
+from tqdm import tqdm
+import random
 
-def load_dataset():
-    data_path = '/Users/jiahang/Documents/gnn/dataset'
+from torchmetrics import Accuracy, AUROC, AveragePrecision, MeanSquaredError
+from sklearn.model_selection import train_test_split
+
+def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, cross_args: dict = None):
+    """
+    label_type: if classification, all labels(int) are converted into its index. If regression, use original values.
+        note: even if it's a regression task in nature, if labels are int, sometimes classification loss function,
+        such as cross-entropy loss, has better performance.
+    eval_type: if eval_type == split, then train-valid-test split style evaluation. elif eval_type == cross, then n_fold
+                cross evalidation
+    """
+    # TODO train-valid-test split, and cross-validation
+    assert label_type in ['classification', 'regression']
+    assert eval_type in ['split', 'cross']
+    if eval_type == 'split':
+        assert split_args is not None
+    elif eval_type == 'cross':
+        assert cross_args is not None
+
+    data_path = '/home/jiahang/gnn/dataset'
     path = os.path.join(data_path, 'FC_Fisher_Z_transformed.pkl')
     with open(path, 'rb') as f:
         data_FC = pickle.load(f)
@@ -13,6 +33,87 @@ def load_dataset():
     path = os.path.join(data_path, 'SC.pkl')
     with open(path, 'rb') as f:
         data_SC = pickle.load(f)
+
+    path = os.path.join(data_path, 'T1.pkl')
+    with open(path, 'rb') as f:
+        data_raw_X = pickle.load(f)
+
+    path = os.path.join(data_path, 'demo.pkl')
+    with open(path, 'rb') as f:
+        data_labels = pickle.load(f)
+    
+    # NOTE note that only data_SC has full keys, is it a semi-supervised task?
+    ## we only take graph which have labels.
+    adjs = torch.zeros((len(data_labels), 2, 200, 200))
+    labels = torch.zeros(len(data_labels))
+    raw_Xs = torch.zeros((len(data_labels), 200, 9))
+    mask = []
+    for i, name in tqdm(enumerate(data_labels.keys())):
+        if name not in data_SC.keys() or name not in data_FC.keys() or name not in data_raw_X.keys():
+            continue
+        if 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
+            continue
+        adjs[i, 0] = torch.tensor(data_SC[name])
+        adjs[i, 1] = torch.tensor(data_FC[name])
+
+        labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
+
+        raw_X = data_raw_X[name].drop(columns=['StructName'])
+        raw_X = raw_X.to_numpy().astype(float)
+        raw_Xs[i] = torch.tensor(raw_X)
+
+        mask.append(i)
+    adjs = adjs[mask]
+    labels = labels[mask]
+    raw_Xs = raw_Xs[mask]
+
+    if label_type == 'classification':
+        labels_class = torch.zeros_like(labels, dtype=torch.long)
+        for i, label in enumerate(labels.unique()):
+            labels_class[labels == label] = i
+        labels = labels_class
+
+    if eval_type == 'split':
+        train_size, valid_size, test_size = \
+            split_args['train_size'], split_args['valid_size'], split_args['test_size']
+        idx = np.arange(len(labels))
+        train_valid_idx, test_idx = \
+            train_test_split(idx, test_size=test_size)
+        train_idx, valid_idx = \
+            train_test_split(train_valid_idx, 
+                             test_size=valid_size / (train_size + valid_size))
+        splits = {
+            'train_idx': train_idx,
+            'valid_idx': valid_idx,
+            'test_idx': test_idx,
+        }
+
+    return adjs, raw_Xs, labels, splits
+
+def set_random_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+class Evaluator:
+    def __init__(self, label_type, num_classes, device):
+        assert label_type in ['classification', 'regression']
+        if label_type == 'classification':
+            assert num_classes is not None
+            self.acc, self.auroc, self.auprc = \
+                Accuracy(task="multiclass", num_classes=num_classes).to(device), \
+                AUROC(task="multiclass", num_classes=num_classes).to(device), \
+                AveragePrecision(task="multiclass", num_classes=num_classes).to(device)
+        else:
+            self.mse = MeanSquaredError().to(device)
+        self.label_type = label_type
+
+    def evaluate(self, logits: torch.Tensor, labels: torch.Tensor):
+        if self.label_type == 'classification':
+            return self.acc(logits, labels), self.auroc(logits, labels), self.auprc(logits, labels)
+        else:
+            return self.mse(logits.squeeze(), labels).sqrt()
 
 class EarlyStopping:
     def __init__(self, patience):
