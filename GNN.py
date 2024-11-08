@@ -2,12 +2,20 @@ import torch
 import torch.nn as nn
 import wandb
 
-from models import MHGCN
+from MHGCN_src import MHGCN
 from utils import set_random_seed, load_dataset, Evaluator, EarlyStopping
 
-def pipe(gName, model_name, hid_dim, l, lr, wd, epochs, patience, dropout, split_args, mean_method=None, device='cuda:7'):
-    hid_dim = 32
-    nlayers = 2
+def pipe(configs):
+    hid_dim = configs['hid_dim'], 
+    nlayers = configs['nlayers'], 
+    lr = configs['lr'],
+    wd = configs['wd'],
+    epochs  = configs['epochs'],
+    patience = configs['patience'],
+    split_args = configs['split_args'],
+    use_wandb = configs['use_wandb'],
+    device='cuda:7'
+
     label_type = 'regression'
     assert label_type in ['classification', 'regression']
     if label_type == 'classification':
@@ -15,11 +23,6 @@ def pipe(gName, model_name, hid_dim, l, lr, wd, epochs, patience, dropout, split
     else:
         out_dim = 1
 
-    # split_args = {
-    #     'train_size': 0.6,
-    #     'valid_size': 0.2,
-    #     'test_size': 0.2,
-    # }
     adjs, raw_Xs, labels, splits = load_dataset(split_args=split_args, label_type=label_type)
     train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']    
     in_dim = raw_Xs.shape[-1]
@@ -52,17 +55,19 @@ def pipe(gName, model_name, hid_dim, l, lr, wd, epochs, patience, dropout, split
             train_acc, train_auroc, train_auprc = evaluator.evaluate(logits, labels[train_idx])
             print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train Acc {train_acc:.4f} | Train Auroc {train_auroc:.4f} | "
                     f"Train Auprc: {train_auprc:.4f}")
-            wandb.log({
-                'train_acc': train_acc,
-                'train_auroc': train_auroc,
-                'train_auprc': train_auprc,
-            })
+            if use_wandb:
+                wandb.log({
+                    'train_acc': train_acc,
+                    'train_auroc': train_auroc,
+                    'train_auprc': train_auprc,
+                })
         else:
             train_rmse = evaluator.evaluate(logits, labels[train_idx])
             print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train RMSE {train_rmse:.4f}")
-            wandb.log({
-                'train_rmse': train_rmse,
-            })
+            if use_wandb:
+                wandb.log({
+                    'train_rmse': train_rmse,
+                })
 
         if epoch % 5 == 0:
             model.eval()
@@ -73,27 +78,28 @@ def pipe(gName, model_name, hid_dim, l, lr, wd, epochs, patience, dropout, split
                 test_acc, test_auroc, test_auprc = evaluator.evaluate(logits_test, labels[test_idx])
                 print(f"Valid Acc {valid_acc:.4f} | Valid Auroc {valid_auroc:.4f} | Valid Auprc: {valid_auprc:.4f}")
                 print(f"Test Acc {test_acc:.4f} | Test Auroc {test_auroc:.4f} | Test Auprc: {test_auprc:.4f}")
+                
+                if use_wandb:
+                    wandb.log({
+                        'valid_acc': valid_acc,
+                        'valid_auroc': valid_auroc,
+                        'valid_auprc': valid_auprc,
 
-                wandb.log({
-                    'valid_acc': valid_acc,
-                    'valid_auroc': valid_auroc,
-                    'valid_auprc': valid_auprc,
-
-                    'test_acc': test_acc,
-                    'test_auroc': test_auroc,
-                    'test_auprc': test_auprc,
-                })
+                        'test_acc': test_acc,
+                        'test_auroc': test_auroc,
+                        'test_auprc': test_auprc,
+                    })
             else:
                 logits_valid = model(adjs[valid_idx], raw_Xs[valid_idx])
                 logits_test = model(adjs[test_idx], raw_Xs[test_idx])
                 valid_rmse = evaluator.evaluate(logits_valid, labels[valid_idx])
                 test_rmse = evaluator.evaluate(logits_test, labels[test_idx])
                 print(f"Valid RMSE {valid_rmse:.4f} | Test RMSE {test_rmse:.4f}")
-
-                wandb.log({
-                    'valid_rmse': valid_rmse,
-                    'test_rmse': test_rmse,
-                })
+                if use_wandb:
+                    wandb.log({
+                        'valid_rmse': valid_rmse,
+                        'test_rmse': test_rmse,
+                    })
         
         # earlystop.step_score(val_acc, model)
         # print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train Acc {train_acc:.4f} | Val Acc {val_acc:.4f} | "
@@ -111,21 +117,18 @@ def pipe(gName, model_name, hid_dim, l, lr, wd, epochs, patience, dropout, split
 if __name__ == '__main__':
     set_random_seed(0)
     searchSpace = {
-                "gName": 'cora',
-                "model_name": "gcn",
                 "hid_dim": 64,
                 "l": 3,
                 "lr": 1e-2,
                 "epochs": 3000,
                 "patience": 20,
-                "dropout": 0.0,
                 "wd": 1e-2,
-                "mean_method": "normal",
                 "split_args": {
                     'train_size': 0.6,
                     'valid_size': 0.2,
                     'test_size': 0.2,
-                }
+                },
+                "use_wandb": True
             }
     run = wandb.init(
         # Set the project where this run will be logged
@@ -133,4 +136,4 @@ if __name__ == '__main__':
         # Track hyperparameters and run metadata
         config=searchSpace
     )
-    pipe(**searchSpace)
+    pipe(searchSpace)
