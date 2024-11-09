@@ -1,1 +1,1 @@
-from MHGCN import MHGCN
+from .MHGCN import MHGCN
