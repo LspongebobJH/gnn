@@ -109,36 +109,3 @@ if __name__ == '__main__':
     #     config=searchSpace
     # )
     pipe(searchSpace)
-
-# from main repo tutorial
-# if __name__ == '__main__':
-
-#     n_train, n_test = 4000, 1000
-#     dim_x, dim_u = 100, 5
-
-#     x_train = torch.tensor(np.random.uniform(0.0, 1.0, (n_train, dim_x)), dtype=torch.float32)
-#     u_train = torch.tensor(np.random.uniform(0.0, 1.0, (n_train, dim_u)), dtype=torch.float32)
-#     x_test = torch.tensor(np.random.uniform(0.0, 1.0, (n_test, dim_x)), dtype=torch.float32)
-#     u_test = torch.tensor(np.random.uniform(0.0, 1.0, (n_test, dim_u)), dtype=torch.float32)
-
-#     x_train, x_val, u_train, u_val = train_test_split(x_train, u_train, test_size=(1/6))
-
-#     # make result folder
-#     now = datetime.datetime.now()
-#     result_path = './results/ci_ivae-time=%d-%d-%d-%d-%d' % (now.month, now.day, now.hour, now.minute, now.second)
-#     os.makedirs(result_path, exist_ok=True)
-#     print('result_path: ', result_path)
-
-#     # build CI-iVAE networks
-#     dim_x, dim_u = np.shape(x_train)[1], np.shape(u_train)[1]
-#     ci_ivae = CI_iVAE.model(dim_x=dim_x, dim_u=dim_u)
-
-#     # train CI-iVAE networks. Results will be saved at the result_path
-#     CI_iVAE.fit(model=ci_ivae, x_train=x_train, u_train=u_train,
-#                 x_val=x_val, u_val=u_val, num_epoch=5, result_path=result_path, num_worker=2)
-
-#     # extract features with trained CI-iVAE networks
-#     z_train = CI_iVAE.extract_feature(result_path=result_path, x=x_train)
-#     z_test = CI_iVAE.extract_feature(result_path=result_path, x=x_test)
-#     z_train = z_train.detach().cpu().numpy()
-#     z_test = z_test.detach().cpu().numpy()

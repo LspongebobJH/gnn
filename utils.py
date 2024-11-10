@@ -8,6 +8,26 @@ import random
 
 from torchmetrics import Accuracy, AUROC, AveragePrecision, MeanSquaredError
 from sklearn.model_selection import train_test_split
+from torch_geometric.data import Batch
+
+def model_infer(model, model_name, **kwargs):
+    """
+    adjs: adj matrices
+    idx: split index 
+    raw_Xs: original Xs
+    data_lisr: list type of pyg data
+    device
+    """
+    device = kwargs['device']
+    if model_name == 'MHGCN':
+        adjs, idx, raw_Xs = kwargs['adjs'], kwargs['idx'], kwargs['raw_Xs']
+        logits = model(adjs[idx], raw_Xs[idx])
+    elif model_name in ['NeuroPath', 'GCN', 'SAGE', 'SGC', 'GAT', 'Transformer']:
+        data_list, idx = kwargs['data_list'], kwargs['idx']
+        data_list = [data_list[i] for i in idx]
+        data = Batch.from_data_list(data_list).to(device)
+        logits = model(data)
+    return logits
 
 def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, cross_args: dict = None):
     """
