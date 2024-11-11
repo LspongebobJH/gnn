@@ -9,6 +9,7 @@ import random
 from torchmetrics import Accuracy, AUROC, AveragePrecision, MeanSquaredError
 from sklearn.model_selection import train_test_split
 from torch_geometric.data import Batch
+from torch_scatter import scatter
 
 def model_infer(model, model_name, **kwargs):
     """
@@ -108,6 +109,7 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             'test_idx': test_idx,
         }
 
+    assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
     return adjs, raw_Xs, labels, splits
 
 def set_random_seed(seed):
@@ -176,3 +178,17 @@ def evaluate(g, feat, labels, mask, model: torch.nn.Module):
         _, indices = torch.max(logits, dim=1)
         correct = torch.sum(indices == labels)
         return correct.item() * 1.0 / len(labels)
+
+def adj_weight2bin(adjs, ratio_sc, ratio_fc):
+    topk_0 = int(adjs.shape[-2] * adjs.shape[-1] * ratio_sc)
+    topk_1 = int(adjs.shape[-2] * adjs.shape[-1] * ratio_fc)
+    original_shape = [adjs.shape[0], adjs.shape[2], adjs.shape[3]]
+    adjs = adjs.flatten(-2)
+    idx_0 = torch.topk(adjs[:, 0].abs(), topk_0, dim=-1)[1] # TODO(jiahang): do we need abs?
+    idx_1 = torch.topk(adjs[:, 1].abs(), topk_1, dim=-1)[1]
+    adjs_0 = scatter(torch.ones_like(idx_0), idx_0).int()
+    adjs_1 = scatter(torch.ones_like(idx_1), idx_1).int()
+    adjs_0 = adjs_0.reshape(original_shape)
+    adjs_1 = adjs_1.reshape(original_shape)
+
+    return adjs_0, adjs_1

@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import scipy.io as sio
 import pdb
+from utils import adj_weight2bin
 
 def load_data_dblp(args):
     dataset = args.dataset
@@ -55,16 +56,16 @@ def parse_skipgram(fname):
 
 # Process a (subset of) a TU dataset into standard form
 def process_tu(data, nb_nodes):
-    nb_graphs = len(data)
+    nb_modal = len(data)
     ft_size = data.num_features
 
-    features = np.zeros((nb_graphs, nb_nodes, ft_size))
-    adjacency = np.zeros((nb_graphs, nb_nodes, nb_nodes))
-    labels = np.zeros(nb_graphs)
-    sizes = np.zeros(nb_graphs, dtype=np.int32)
-    masks = np.zeros((nb_graphs, nb_nodes))
+    features = np.zeros((nb_modal, nb_nodes, ft_size))
+    adjacency = np.zeros((nb_modal, nb_nodes, nb_nodes))
+    labels = np.zeros(nb_modal)
+    sizes = np.zeros(nb_modal, dtype=np.int32)
+    masks = np.zeros((nb_modal, nb_nodes))
        
-    for g in range(nb_graphs):
+    for g in range(nb_modal):
         sizes[g] = data[g].x.shape[0]
         features[g, :sizes[g]] = data[g].x
         labels[g] = data[g].y[0]
@@ -108,9 +109,9 @@ def accuracy(output, labels):
  Expected shape: [graph, nodes, nodes]
 """
 def adj_to_bias(adj, sizes, nhood=1):
-    nb_graphs = adj.shape[0]
+    nb_modal = adj.shape[0]
     mt = np.empty(adj.shape)
-    for g in range(nb_graphs):
+    for g in range(nb_modal):
         mt[g] = np.eye(adj.shape[1])
         for _ in range(nhood):
             mt[g] = np.matmul(mt[g], (adj[g] + np.eye(adj.shape[1])))
