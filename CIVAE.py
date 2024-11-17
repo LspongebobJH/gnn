@@ -30,13 +30,8 @@ def pipe(configs):
 
     # raw_Xs = raw_Xs.reshape(raw_Xs.shape[0] * raw_Xs.shape[1], -1)
     raw_Xs = raw_Xs.reshape(-1, raw_Xs.shape[1] * raw_Xs.shape[2])
-    batch_norm = nn.BatchNorm1d(raw_Xs.shape[-1], affine=False)
-    raw_Xs = batch_norm(raw_Xs)
     
     labels = torch.unsqueeze(labels, 1)
-
-    layer_norm = nn.LayerNorm(normalized_shape=(adjs.shape[-2], adjs.shape[-1]), elementwise_affine=False)
-    adjs = layer_norm(adjs)
 
     if x_concat_adj:
         raw_Xs = torch.concatenate([raw_Xs, adjs.flatten(1)], dim=-1)
@@ -84,28 +79,38 @@ def pipe(configs):
 
     print(f"train rmse {train_rmse:.4f} | valid rmse {valid_rmse:.4f} | test rmse {test_rmse:.4f}")
 
+    return train_rmse, valid_rmse, test_rmse
+    
+
 
 if __name__ == '__main__':
-    set_random_seed(0)
-    searchSpace = {
-                "hid_dim": 64,
-                "l": 3,
-                "lr": 1e-2,
-                "epochs": 1,
-                "patience": 20,
-                "wd": 1e-2,
-                "split_args": {
-                    'train_size': 0.6,
-                    'valid_size': 0.2,
-                    'test_size': 0.2,
-                },
-                "use_wandb": True,
-                "x_concat_adj": True
-            }
-    # run = wandb.init(
-    #     # Set the project where this run will be logged
-    #     project="multiplex gnn",
-    #     # Track hyperparameters and run metadata
-    #     config=searchSpace
-    # )
-    pipe(searchSpace)
+    log_idx = 1
+    train, valid, test = [], [], []
+    for seed in range(5):
+        set_random_seed(seed)
+        searchSpace = {
+                    "epochs": 100,
+                    "split_args": {
+                        'train_size': 0.6,
+                        'valid_size': 0.2,
+                        'test_size': 0.2,
+                    },
+                    "use_wandb": False,
+                    "x_concat_adj": False
+                }
+        # run = wandb.init(
+        #     # Set the project where this run will be logged
+        #     project="multiplex gnn",
+        #     # Track hyperparameters and run metadata
+        #     config=searchSpace
+        # )
+        best_train_rmse, best_val_rmse, best_test_rmse = pipe(searchSpace)
+        train.append(best_train_rmse)
+        valid.append(best_val_rmse)
+        test.append(best_test_rmse)
+
+    with open(f'./logs/log_{log_idx}.txt', 'a') as f:
+            f.write(f"CIVAE: ")
+            f.write(f'best_train_rmse: {np.mean(train):.4f}±{np.std(train):.4f} | '
+                    f'best_val_rmse: {np.mean(valid):.4f}±{np.std(valid):.4f} | '
+                    f'best_test_rmse: {np.mean(test):.4f}±{np.std(test):.4f}\n')

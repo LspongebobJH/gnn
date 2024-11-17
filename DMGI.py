@@ -16,6 +16,8 @@ class embedder:
 
         # adj, features, labels, idx_train, idx_valid, idx_test = process.load_data_dblp(args)
         adj, features, labels, splits = load_dataset(split_args=args.split_args, label_type=args.label_type)
+        self.features = features
+
         idx_train, idx_valid, idx_test = \
             splits['train_idx'], splits['valid_idx'], splits['test_idx']
 
@@ -32,11 +34,6 @@ class embedder:
             self.adj = [process.sparse_mx_to_torch_sparse_tensor(adj_) for adj_ in adj]
 
         elif args.preprocess == 'our':
-            batch_norm = nn.BatchNorm1d(features.shape[-1], affine=False)
-            layer_norm = nn.LayerNorm(normalized_shape=(adj.shape[-2], adj.shape[-1]), elementwise_affine=False)
-            original_shape = features.shape
-            self.features = batch_norm(features.reshape(-1, features.shape[-1])).reshape(original_shape)
-            adj = layer_norm(adj)
             adj_0, adj_1 = adj_weight2bin(adj, args.ratio, args.ratio)
 
         data_list_0, data_list_1 = [], []
@@ -106,6 +103,7 @@ class DMGI(embedder):
         self.args = args
 
     def training(self):
+        patience = self.args.patience
         evaluator = Evaluator(label_type='regression', num_classes=1, device=self.args.device)
         features = self.features.to(args.device)
         model = modeler(self.args).to(self.args.device)
@@ -114,6 +112,11 @@ class DMGI(embedder):
         b_xent = nn.BCEWithLogitsLoss()
         # xent = nn.CrossEntropyLoss()
         xent = nn.MSELoss()
+
+        best_train_rmse = torch.inf
+        best_val_rmse = torch.inf
+        best_test_rmse = torch.inf
+        cnt = 0
         for epoch in range(self.args.nb_epochs):
             xent_loss = None
             model.train()
@@ -141,7 +144,7 @@ class DMGI(embedder):
             lbl_2 = torch.zeros(len(self.data_train[0]), self.args.nb_nodes)
             lbl = torch.cat((lbl_1, lbl_2), 1).to(self.args.device)
             
-            result = model(features[self.idx_train], self.data_train, shuf[self.idx_train], self.args.sparse, None, None, None)
+            result = model(features[self.idx_train], self.data_train, shuf[self.idx_train], self.args.sparse, None, None, None, self.idx_train)
             logits = result['logits']
 
             for view_idx, logit in enumerate(logits):
@@ -167,11 +170,22 @@ class DMGI(embedder):
 
             if epoch % 5 == 0:
                 model.eval()
-                logits_valid = model(features[self.idx_valid], self.data_valid, shuf[self.idx_valid], self.args.sparse, None, None, None)['semi']
-                logits_test = model(features[self.idx_test], self.data_test, shuf[self.idx_test], self.args.sparse, None, None, None)['semi']
+                logits_valid = model(features[self.idx_valid], self.data_valid, shuf[self.idx_valid], self.args.sparse, None, None, None, self.idx_valid)['semi']
+                logits_test = model(features[self.idx_test], self.data_test, shuf[self.idx_test], self.args.sparse, None, None, None, self.idx_test)['semi']
                 valid_rmse = evaluator.evaluate(logits_valid, self.val_lbls)
                 test_rmse = evaluator.evaluate(logits_test, self.test_lbls)
                 print(f"Valid RMSE {valid_rmse:.4f} | Test RMSE {test_rmse:.4f}")
+
+                if valid_rmse < best_val_rmse:
+                    best_train_rmse = semi_loss.sqrt()
+                    best_val_rmse = valid_rmse
+                    best_test_rmse = test_rmse
+                    cnt = 0
+                else:
+                    cnt += 1
+
+                if cnt >= patience:
+                    break
 
             # if loss < best:
             #     best = loss
@@ -185,44 +199,67 @@ class DMGI(embedder):
 
             
 
-        pass
+        return best_train_rmse.item(), best_val_rmse.item(), best_test_rmse.item()
         # model.load_state_dict(torch.load('saved_model/best_{}_{}_{}.pkl'.format(self.args.dataset, self.args.embedder, self.args.metapaths)))
 
         # Evaluation
         # model.eval()
         # evaluate(model.H.data.detach(), self.idx_train, self.idx_valid, self.idx_test, self.labels, self.args.device)
 
-if __name__ == '__main__':
-    data = {
-        "embedder": "DMGI",
-        "dataset": "imdb",
-        "metapaths": "MAM,MDM",
-        "nb_epochs": 1000,
-        "hid_units": 64,
-        "lr": 1e-3,
-        "l2_coef": 0.0001,
-        "drop_prob": 0.5,
-        "reg_coef": 0.001,
-        "sup_coef": 0.1,
-        "sc": 3.0,
-        "margin": 0.1,
-        "patience": 20,
-        "nheads": 1,
-        "activation": "relu",
-        "isSemi": True,
-        "isBias": False,
-        "isAttn": False,
-        "preprocess": "our", # [our, author]
-        "label_type": "regression",
-        "split_args": {
-                    'train_size': 0.6,
-                    'valid_size': 0.2,
-                    'test_size': 0.2,
-                },
-        "ratio": 0.3,
-        "device": "cuda:7"
-    }
-    args = Namespace(**data)
+def pipe(configs):
+    args = Namespace(**configs)
 
     model = DMGI(args)
-    model.training()
+    best_train_rmse, best_val_rmse, best_test_rmse = model.training()
+
+    return best_train_rmse, best_val_rmse, best_test_rmse
+
+
+if __name__ == '__main__':
+    log_idx = 1
+    train, valid, test = [], [], []
+    for seed in range(5):
+        searchSpace = {
+            "embedder": "DMGI",
+            "dataset": "imdb",
+            "metapaths": "MAM,MDM",
+            "nb_epochs": 2000,
+            "hid_dim": 128,
+            "lr": 1e-3,
+            "l2_coef": 0.0001,
+            "drop_prob": 0.5,
+            "reg_coef": 0.001,
+            "sup_coef": 0.1,
+            "sc": 3.0,
+            "margin": 0.1,
+            "patience": 10,
+            "nheads": 1,
+            "activation": "relu",
+            "isSemi": True,
+            "isBias": False,
+            "isAttn": False,
+            "preprocess": "our", # [our, author]
+            "label_type": "regression",
+            "split_args": {
+                        'train_size': 0.6,
+                        'valid_size': 0.2,
+                        'test_size': 0.2,
+                    },
+            "ratio": 0.3,
+            "device": "cuda:7"
+        }
+        args = Namespace(**searchSpace)
+
+        model = DMGI(args)
+        best_train_rmse, best_val_rmse, best_test_rmse = model.training()
+
+        train.append(best_train_rmse)
+        valid.append(best_val_rmse)
+        test.append(best_test_rmse)
+
+    with open(f'./logs/log_{log_idx}.txt', 'a') as f:
+            f.write(f"DMGI (use nb_graphs Z rather than single 1 Z): ")
+            f.write(f'best_train_rmse: {np.mean(train):.4f}±{np.std(train):.4f} | '
+                    f'best_val_rmse: {np.mean(valid):.4f}±{np.std(valid):.4f} | '
+                    f'best_test_rmse: {np.mean(test):.4f}±{np.std(test):.4f}\n')
+    

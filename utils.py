@@ -7,9 +7,10 @@ from tqdm import tqdm
 import random
 
 from torchmetrics import Accuracy, AUROC, AveragePrecision, MeanSquaredError
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 from torch_geometric.data import Batch
 from torch_scatter import scatter
+import torch.nn as nn
 
 def model_infer(model, model_name, **kwargs):
     """
@@ -28,7 +29,7 @@ def model_infer(model, model_name, **kwargs):
         data_list = [data_list[i] for i in idx]
         data = Batch.from_data_list(data_list).to(device)
         logits = model(data)
-    return logits
+    return logits.flatten()
 
 def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, cross_args: dict = None):
     """
@@ -43,8 +44,6 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
     assert eval_type in ['split', 'cross']
     if eval_type == 'split':
         assert split_args is not None
-    elif eval_type == 'cross':
-        assert cross_args is not None
 
     data_path = '/home/jiahang/gnn/dataset'
     path = os.path.join(data_path, 'FC_Fisher_Z_transformed.pkl')
@@ -108,6 +107,22 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             'valid_idx': valid_idx,
             'test_idx': test_idx,
         }
+    elif eval_type == 'cross':
+        kfold = KFold(n_splits=5, shuffle=True)
+        splits = list(kfold.split(X=idx))
+    
+    batchnorm = nn.BatchNorm1d(raw_Xs.shape[-1], affine=False)
+    layernorm = nn.LayerNorm([adjs.shape[-2], adjs.shape[-1]], elementwise_affine=False)
+
+    original_feat_shape = raw_Xs.shape
+    raw_Xs = batchnorm(
+        raw_Xs.reshape(-1, raw_Xs.shape[-1])
+    ).reshape(original_feat_shape)
+
+    original_adjs_shape = adjs.shape
+    layernorm(
+        adjs.reshape(-1, adjs.shape[-2], adjs.shape[-1])
+    ).reshape(original_adjs_shape)
 
     assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
     return adjs, raw_Xs, labels, splits

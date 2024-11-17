@@ -9,30 +9,30 @@ class modeler(nn.Module):
     def __init__(self, args):
         super(modeler, self).__init__()
         self.args = args
-        # self.gcn = nn.ModuleList([GCN(args.ft_size, args.hid_units, args.activation, args.drop_prob, args.isBias) for _ in range(args.nb_modal)])
+        # self.gcn = nn.ModuleList([GCN(args.ft_size, args.hid_dim, args.activation, args.drop_prob, args.isBias) for _ in range(args.nb_modal)])
         self.gcn = nn.ModuleList(
             [
                 GCN(
-                    args.ft_size, args.hid_units, 1, dropout=args.drop_prob
+                    args.ft_size, args.hid_dim, 1, dropout=args.drop_prob
                 ) for _ in range(args.nb_modal)
             ]
         )
 
-        self.disc = Discriminator(args.hid_units)
-        self.Z = nn.Parameter(torch.FloatTensor(1, args.nb_nodes, args.hid_units))
+        self.disc = Discriminator(args.hid_dim)
+        self.Z = nn.Parameter(torch.FloatTensor(args.nb_graphs, args.nb_nodes, args.hid_dim))
         self.readout_func = self.args.readout_func
         if args.isAttn:
             self.attn = nn.ModuleList([Attention(args) for _ in range(args.nheads)])
 
         if args.isSemi:
-            self.logistic = LogReg(args.hid_units, args.nb_classes).to(args.device)
+            self.logistic = LogReg(args.hid_dim, args.nb_classes).to(args.device)
 
         self.init_weight()
 
     def init_weight(self):
         nn.init.xavier_normal_(self.Z)
 
-    def forward(self, feature, data, shuf, sparse, msk, samp_bias1, samp_bias2):
+    def forward(self, feature, data, shuf, sparse, msk, samp_bias1, samp_bias2, idx):
         h_1_all = []; h_2_all = []; c_all = []; logits = []
         result = {}
 
@@ -79,8 +79,9 @@ class modeler(nn.Module):
 
 
         # consensus regularizer
-        pos_reg_loss = ((self.Z - h_1_all) ** 2).sum()
-        neg_reg_loss = ((self.Z - h_2_all) ** 2).sum()
+        Z = self.Z[idx]
+        pos_reg_loss = ((Z - h_1_all) ** 2).sum()
+        neg_reg_loss = ((Z - h_2_all) ** 2).sum()
         reg_loss = pos_reg_loss - neg_reg_loss
         result['reg_loss'] = reg_loss
 

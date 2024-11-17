@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import wandb
+import numpy as np
 
 from MHGCN_src import MHGCN
 from NeuroPath_src import DetourTransformer, Transformer, GCN, SAGE, SGC, GAT, to_pyg
@@ -18,16 +19,19 @@ def pipe(configs):
     model_name = configs['model_name']
     device='cuda:7'
 
-    label_type = 'regression'
+    label_type = configs['label_type']
+    eval_type = configs['eval_type']
+
     assert label_type in ['classification', 'regression']
     if label_type == 'classification':
         out_dim = (max(labels)+1).item()
     else:
         out_dim = 1
 
-    adjs, raw_Xs, labels, splits = load_dataset(split_args=split_args, label_type=label_type)
+    adjs, raw_Xs, labels, splits = load_dataset(split_args=split_args, label_type=label_type, eval_type=eval_type)
     train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']    
     in_dim = raw_Xs.shape[-1]
+
 
     data_list = None
     if model_name == 'MHGCN':
@@ -63,8 +67,12 @@ def pipe(configs):
     raw_Xs = raw_Xs.to(device)
     labels = labels.to(device)
 
+    best_train_rmse = torch.inf
+    best_val_rmse = torch.inf
+    best_test_rmse = torch.inf
+    cnt = 0
     for epoch in range(epochs):
-        if epoch == 1000:
+        if epoch == 1000 and  model_name == 'MHGCN':
             for g in optimizer.param_groups:
                 g['lr'] = 1e-3
         model.train()
@@ -122,20 +130,34 @@ def pipe(configs):
                                          data_list=data_list, idx=test_idx, device=device)
                 valid_rmse = evaluator.evaluate(logits_valid, labels[valid_idx])
                 test_rmse = evaluator.evaluate(logits_test, labels[test_idx])
+
                 print(f"Valid RMSE {valid_rmse:.4f} | Test RMSE {test_rmse:.4f}")
+
+                if valid_rmse < best_val_rmse:
+                    best_train_rmse = train_rmse
+                    best_val_rmse = valid_rmse
+                    best_test_rmse = test_rmse
+                    cnt = 0
+                else:
+                    cnt += 1
+
+                if cnt >= patience:
+                    break
+
                 if use_wandb:
                     wandb.log({
                         'valid_rmse': valid_rmse,
                         'test_rmse': test_rmse,
                     })
         
+    return best_train_rmse.item(), best_val_rmse.item(), best_test_rmse.item()
         # earlystop.step_score(val_acc, model)
         # print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train Acc {train_acc:.4f} | Val Acc {val_acc:.4f} | "
         #       f"Test acc: {test_acc:.4f} | Patience: {earlystop.counter}/{patience}")
         
-        if earlystop.early_stop:
-            print("Early Stopping!")
-            break
+        # if earlystop.early_stop:
+        #     print("Early Stopping!")
+        #     break
     # earlystop.load_model(model)
     # acc = evaluate(g, feat, labels, test_mask, model)
     # print("Test accuracy {:.4f}".format(acc))
@@ -143,28 +165,43 @@ def pipe(configs):
     # return train_acc_list, valid_acc_list, test_acc_list, acc
 
 if __name__ == '__main__':
-    set_random_seed(0)
-    searchSpace = {
-                "hid_dim": 384,
-                "l": 3,
-                "lr": 1e-3,
-                "epochs": 200,
-                "patience": 20,
-                "wd": 0,
-                "nlayers": 1,
-                "split_args": {
-                    'train_size': 0.6,
-                    'valid_size': 0.2,
-                    'test_size': 0.2,
-                },
-                "use_wandb": False,
-                "model_name": "GAT"
-            }
-    if searchSpace['use_wandb']:
-        run = wandb.init(
-            # Set the project where this run will be logged
-            project="multiplex gnn",
-            # Track hyperparameters and run metadata
-            config=searchSpace
-        )
-    pipe(searchSpace)
+    log_idx = 1
+    train, valid, test = [], [], []
+    for model_name in ['NeuroPath', 'SGC', 'GAT', 'Transformer']:
+        for seed in range(5):
+            set_random_seed(seed)
+            searchSpace = {
+                        "hid_dim": 128,
+                        "l": 3,
+                        "lr": 1e-3,
+                        "epochs": 2000,
+                        "patience": 10,
+                        "wd": 0,
+                        "nlayers": 1,
+                        "split_args": {
+                            'train_size': 0.6,
+                            'valid_size': 0.2,
+                            'test_size': 0.2,
+                        },
+                        "use_wandb": False,
+                        "model_name": model_name,
+                        "eval_type": "split",
+                        "label_type": "regression"
+                    }
+            if searchSpace['use_wandb']:
+                run = wandb.init(
+                    # Set the project where this run will be logged
+                    project="multiplex gnn",
+                    # Track hyperparameters and run metadata
+                    config=searchSpace
+                )
+            best_train_rmse, best_val_rmse, best_test_rmse = pipe(searchSpace)
+            train.append(best_train_rmse)
+            valid.append(best_val_rmse)
+            test.append(best_test_rmse)
+
+        with open(f'./logs/log_{log_idx}.txt', 'a') as f:
+            f.write(f"{searchSpace['model_name']}: ")
+            f.write(f'best_train_rmse: {np.mean(train):.4f}±{np.std(train):.4f} | '
+                    f'best_val_rmse: {np.mean(valid):.4f}±{np.std(valid):.4f} | '
+                    f'best_test_rmse: {np.mean(test):.4f}±{np.std(test):.4f}\n')

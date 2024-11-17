@@ -30,7 +30,7 @@ class DetourTransformer(nn.Module):
         self.nlayer = nlayer
         self.node_sz = node_sz
 
-        self.batchnorm = nn.BatchNorm1d(org_in_channel)
+        # self.batchnorm = nn.BatchNorm1d(org_in_channel)
             
         self.lin_first = nn.Sequential(
             nn.Linear(org_in_channel, in_channel), 
@@ -61,7 +61,7 @@ class DetourTransformer(nn.Module):
 
     def forward(self, data):
         node_feature = data.x
-        node_feature = self.batchnorm(node_feature)
+        # node_feature = self.batchnorm(node_feature)
         node_feature = self.lin_first(node_feature)
         node_feature = node_feature.view(data.batch.max()+1, len(torch.where(data.batch==0)[0]), self.in_channel)
 

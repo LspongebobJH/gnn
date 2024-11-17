@@ -165,3 +165,4 @@ dataset/
 papers/
 wandb/
 results/
+logs/

@@ -44,12 +44,12 @@ class MHGCN(nn.Module):
 
         self.out = out
         # feature embedding
-        self.batchnorm = nn.BatchNorm1d(nfeat)
+        # self.batchnorm = nn.BatchNorm1d(nfeat)
 
-        self.layernorm = nn.ModuleList([
-            nn.LayerNorm(adj_shape),
-            nn.LayerNorm(adj_shape)
-        ])
+        # self.layernorm = nn.ModuleList([
+        #     nn.LayerNorm(adj_shape),
+        #     nn.LayerNorm(adj_shape)
+        # ])
         
         self.layers = nn.ModuleList()
         self.layers.append(GraphConvolution(nfeat, nhid))
@@ -63,18 +63,18 @@ class MHGCN(nn.Module):
         torch.nn.init.uniform_(self.weight_b, a=0, b=0.1)
 
     def forward(self, A_batch: torch.Tensor, feature: torch.Tensor):
-        A_batch_new = torch.zeros_like(A_batch).to(A_batch.device)
-        A_batch_new[:, 0] = self.layernorm[0](A_batch[:, 0])
-        A_batch_new[:, 1] = self.layernorm[1](A_batch[:, 1])
-        A_batch = A_batch_new
+        # A_batch_new = torch.zeros_like(A_batch).to(A_batch.device)
+        # A_batch_new[:, 0] = self.layernorm[0](A_batch[:, 0])
+        # A_batch_new[:, 1] = self.layernorm[1](A_batch[:, 1])
+        # A_batch = A_batch_new
         A_batch = A_batch.permute(0, 2, 3, 1)
         final_A = (A_batch @ self.weight_b).squeeze()
 
 
-        original_feat_shape = feature.shape
-        feature = self.batchnorm(
-            feature.reshape(-1, feature.shape[-1])
-        ).reshape(original_feat_shape)
+        # original_feat_shape = feature.shape
+        # feature = self.batchnorm(
+        #     feature.reshape(-1, feature.shape[-1])
+        # ).reshape(original_feat_shape)
 
         embeds = []
         for layer in self.layers:
