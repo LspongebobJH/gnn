@@ -3,16 +3,192 @@ import pickle
 import numpy as np
 import torch
 from copy import deepcopy
+from tqdm import tqdm
+import random
+import os
 
-def load_dataset():
-    data_path = '/Users/jiahang/Documents/gnn/dataset'
-    path = os.path.join(data_path, 'FC_Fisher_Z_transformed.pkl')
-    with open(path, 'rb') as f:
-        data_FC = pickle.load(f)
+from torchmetrics import Accuracy, AUROC, AveragePrecision, MeanSquaredError
+from sklearn.model_selection import train_test_split, KFold
+from torch_geometric.data import Batch
+from torch_scatter import scatter
+import torch.nn as nn
 
-    path = os.path.join(data_path, 'SC.pkl')
-    with open(path, 'rb') as f:
-        data_SC = pickle.load(f)
+from torch_geometric.data import Batch, Data
+from time import time
+
+
+SINGLE_MODALITY_MODELS = ['GCN', 'SAGE', 'SGC', 'GAT', 'GIN', 'Transformer']
+FUSE_SINGLE_MODALITY_MODELS = [name + '_fuse' for name in SINGLE_MODALITY_MODELS]
+
+def model_infer(model, model_name, **kwargs):
+    """
+    adjs: adj matrices
+    idx: split index 
+    raw_Xs: original Xs
+    data_lisr: list type of pyg data
+    device
+    """
+    if model_name == 'MHGCN':
+        adjs, idx, raw_Xs = kwargs['adjs'], kwargs['idx'], kwargs['raw_Xs']
+        logits = model(adjs[idx], raw_Xs[idx])
+    elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS or \
+         model_name in FUSE_SINGLE_MODALITY_MODELS:
+        data = kwargs['data']
+        logits = model(data)
+    return logits.flatten()
+
+def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, cross_args: dict = None):
+    """
+
+    label_type: if classification, all labels(int) are converted into its index. If regression, use original values.
+        note: even if it's a regression task in nature, if labels are int, sometimes classification loss function,
+        such as cross-entropy loss, has better performance.
+    eval_type: if eval_type == split, then train-valid-test split style evaluation. elif eval_type == cross, then n_fold
+                cross evalidation
+    """
+    # TODO train-valid-test split, and cross-validation
+    assert label_type in ['classification', 'regression']
+    assert eval_type in ['split', 'cross']
+    if eval_type == 'split':
+        assert split_args is not None
+
+    file_path = './dataset/processed_data.pkl'
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as f:
+            data = pickle.load(f)
+        adjs = data['adjs']
+        raw_Xs = data['raw_Xs']
+        labels = data['labels']
+        splits = data['splits']
+        mu_lbls = data['mu_lbls']
+        std_lbls = data['std_lbls']
+    else:
+        data_path = '/home/jiahang/gnn/dataset'
+        path = os.path.join(data_path, 'FC_Fisher_Z_transformed.pkl')
+        with open(path, 'rb') as f:
+            data_FC = pickle.load(f)
+
+        path = os.path.join(data_path, 'SC.pkl')
+        with open(path, 'rb') as f:
+            data_SC = pickle.load(f)
+
+        path = os.path.join(data_path, 'T1.pkl')
+        with open(path, 'rb') as f:
+            data_raw_X = pickle.load(f)
+
+        path = os.path.join(data_path, 'demo.pkl')
+        with open(path, 'rb') as f:
+            data_labels = pickle.load(f)
+        
+        # NOTE note that only data_SC has full keys, is it a semi-supervised task?
+        ## we only take graph which have labels and both SC, FC modalities.
+        adjs = torch.zeros((len(data_labels), 2, 200, 200))
+        labels = torch.zeros(len(data_labels))
+        raw_Xs = torch.zeros((len(data_labels), 200, 9))
+        mask = []
+        for i, name in tqdm(enumerate(data_labels.keys())):
+            if name not in data_SC.keys() or name not in data_FC.keys() or name not in data_raw_X.keys():
+                continue
+            if 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
+                continue
+            adjs[i, 0] = torch.tensor(data_SC[name])
+            adjs[i, 1] = torch.tensor(data_FC[name])
+
+            labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
+
+            raw_X = data_raw_X[name].drop(columns=['StructName'])
+            raw_X = raw_X.to_numpy().astype(float)
+            raw_Xs[i] = torch.tensor(raw_X)
+
+            mask.append(i)
+        adjs = adjs[mask]
+        labels = labels[mask]
+        raw_Xs = raw_Xs[mask]
+        mu, std = 0., 1.
+
+        if label_type == 'classification':
+            labels_class = torch.zeros_like(labels, dtype=torch.long)
+            for i, label in enumerate(labels.unique()):
+                labels_class[labels == label] = i
+            labels = labels_class
+
+        else:
+            mu_lbls, std_lbls = labels.mean(), labels.std()
+            labels = (labels - mu_lbls) / std_lbls
+
+        if eval_type == 'split':
+            train_size, valid_size, test_size = \
+                split_args['train_size'], split_args['valid_size'], split_args['test_size']
+            idx = np.arange(len(labels))
+            train_valid_idx, test_idx = \
+                train_test_split(idx, test_size=test_size)
+            train_idx, valid_idx = \
+                train_test_split(train_valid_idx, 
+                                test_size=valid_size / (train_size + valid_size))
+            splits = {
+                'train_idx': train_idx,
+                'valid_idx': valid_idx,
+                'test_idx': test_idx,
+            }
+        elif eval_type == 'cross':
+            kfold = KFold(n_splits=5, shuffle=True)
+            splits = list(kfold.split(X=idx))
+        
+        batchnorm = nn.BatchNorm1d(raw_Xs.shape[-1], affine=False)
+        layernorm = nn.LayerNorm([adjs.shape[-2], adjs.shape[-1]], elementwise_affine=False)
+
+        original_feat_shape = raw_Xs.shape
+        raw_Xs = batchnorm(
+            raw_Xs.reshape(-1, raw_Xs.shape[-1])
+        ).reshape(original_feat_shape)
+
+        original_adjs_shape = adjs.shape
+        adjs = layernorm(
+            adjs.reshape(-1, adjs.shape[-2], adjs.shape[-1])
+        ).reshape(original_adjs_shape)
+
+        data = {
+            'adjs': adjs,
+            'raw_Xs': raw_Xs,
+            'labels': labels,
+            'splits': splits,
+            'mu_lbls': mu_lbls,
+            'std_lbls': std_lbls
+        }
+
+        with open(file_path, 'wb') as f:
+            pickle.dump(data, f)
+
+        assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
+    return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
+
+def set_random_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+class Evaluator:
+    def __init__(self, mu_lbls, std_lbls, label_type, num_classes, device):
+        assert label_type in ['classification', 'regression']
+        self.mu_lbls, self.std_lbls = mu_lbls, std_lbls
+        if label_type == 'classification':
+            assert num_classes is not None
+            self.acc, self.auroc, self.auprc = \
+                Accuracy(task="multiclass", num_classes=num_classes).cuda(), \
+                AUROC(task="multiclass", num_classes=num_classes).cuda(), \
+                AveragePrecision(task="multiclass", num_classes=num_classes).cuda()
+        else:
+            self.mse = MeanSquaredError().cuda()
+        self.label_type = label_type
+
+    def evaluate(self, logits: torch.Tensor, labels: torch.Tensor):
+        if self.label_type == 'classification':
+            return self.acc(logits, labels), self.auroc(logits, labels), self.auprc(logits, labels)
+        else:
+            labels = labels * self.std_lbls + self.mu_lbls
+            logits = logits * self.std_lbls + self.mu_lbls
+            return self.mse(logits.squeeze(), labels).sqrt()
 
 class EarlyStopping:
     def __init__(self, patience):
@@ -55,3 +231,71 @@ def evaluate(g, feat, labels, mask, model: torch.nn.Module):
         _, indices = torch.max(logits, dim=1)
         correct = torch.sum(indices == labels)
         return correct.item() * 1.0 / len(labels)
+
+def adj_weight2bin(adjs, ratio_sc, ratio_fc):
+    topk_0 = int(adjs.shape[-2] * adjs.shape[-1] * ratio_sc)
+    topk_1 = int(adjs.shape[-2] * adjs.shape[-1] * ratio_fc)
+    original_shape = [adjs.shape[0], adjs.shape[2], adjs.shape[3]]
+    adjs = adjs.flatten(-2)
+    idx_0 = torch.topk(adjs[:, 0].abs(), topk_0, dim=-1)[1] # TODO(jiahang): do we need abs?
+    idx_1 = torch.topk(adjs[:, 1].abs(), topk_1, dim=-1)[1]
+    adjs_0 = scatter(torch.ones_like(idx_0), idx_0).int()
+    adjs_1 = scatter(torch.ones_like(idx_1), idx_1).int()
+    adjs_0 = adjs_0.reshape(original_shape)
+    adjs_1 = adjs_1.reshape(original_shape)
+
+    return adjs_0, adjs_1
+
+def to_pyg_single(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float, option: str):
+    adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
+
+    if option == 'sc':
+        adjs_target = adjs_0
+    elif option == 'fc':
+        adjs_target = adjs_1
+    
+    data_list = []
+    for i in tqdm(range(len(adjs_target))):
+        data = {
+            'x': raw_Xs[i],
+            'y': labels[i],
+            'edge_index': torch.stack(torch.nonzero(adjs_target[i], as_tuple=True)),
+            'adj_sc': adjs_0[i].unsqueeze(0),
+            'adj_fc': adjs_1[i].unsqueeze(0),
+        }
+        data = Data(**data)
+        data_list.append(data)
+
+    return data_list
+
+def split_pyg(data_list: list, train_idx: list, valid_idx: list, test_idx: list):
+    print("preprocessing pyg data list")
+    time_st = time()
+    train_data = [data_list[i] for i in train_idx]
+    train_data = Batch.from_data_list(train_data).cuda()
+
+    valid_data = [data_list[i] for i in valid_idx]
+    valid_data = Batch.from_data_list(valid_data).cuda()
+
+    test_data = [data_list[i] for i in test_idx]
+    test_data = Batch.from_data_list(test_data).cuda()
+
+    print(f"finish preprocessing: {time() - time_st:.2f}s")
+    return train_data, valid_data, test_data
+
+def to_pyg_fuse(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float):
+    adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
+    
+    data_list = []
+    for i in tqdm(range(len(adjs_0))):
+        data = {
+            'x': raw_Xs[i],
+            'y': labels[i],
+            'edge_index_sc': torch.stack(torch.nonzero(adjs_0[i], as_tuple=True)),
+            'edge_index_fc': torch.stack(torch.nonzero(adjs_1[i], as_tuple=True)),
+        }
+        data = Data(**data)
+        data_list.append(data)
+
+    return data_list
+
