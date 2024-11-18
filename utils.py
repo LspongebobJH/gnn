@@ -18,7 +18,7 @@ from time import time
 
 device = torch.cuda.current_device() if torch.cuda.is_available() else 'cpu'
 SINGLE_MODALITY_MODELS = ['GCN', 'SAGE', 'SGC', 'GAT', 'GIN', 'Transformer']
-FUSE_SINGLE_MODALITY_MODELS = [name + '_fuse' for name in SINGLE_MODALITY_MODELS]
+FUSE_SINGLE_MODALITY_MODELS = [name + '_fuse_embed' for name in SINGLE_MODALITY_MODELS]
 
 def model_infer(model, model_name, **kwargs):
     """
@@ -284,7 +284,7 @@ def split_pyg(data_list: list, train_idx: list, valid_idx: list, test_idx: list)
     print(f"finish preprocessing: {time() - time_st:.2f}s")
     return train_data, valid_data, test_data
 
-def to_pyg_fuse(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float):
+def to_pyg_fuse_embed(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float):
     adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
     
     data_list = []

@@ -1,12 +1,12 @@
 program: run_wandb.py
 method: grid
-name: sweep-GAT
+name: sweep-gat-fuse
 metric:
   goal: minimize
   name: best_val_rmse
 parameters:
   hid_dim:
-    values: [64, 128]
+    values: [32, 64]
   lr:
     values: [1e-2, 1e-3]
   epochs:
@@ -27,14 +27,16 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    value: GAT
-  modality:
-    values: [sc, fc]
-  ratio:
+    value: GAT_fuse_embed
+  # modality:
+  #   values: [sc, fc]
+  # ratio:
+  #   values: [0.2, 0.8]
+  ratio_sc:
     values: [0.2, 0.8]
-  # ratio_sc:
-  #   values: [0.2, 0.8]
-  # ratio_fc:
-  #   values: [0.2, 0.8]
+  ratio_fc:
+    values: [0.2, 0.8]
   reduce:
     value: mean
+  reduce_fuse_embed:
+    values: [mean, concat, sum]
