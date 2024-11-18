@@ -8,6 +8,7 @@ from torch_geometric.nn import MessagePassing, GCNConv
 
 from .vanilla_models import Classifier
 
+from utils import device
 
 class DetourTransformer(nn.Module):
 
@@ -136,7 +137,7 @@ class DetourTransformerSingleFC(nn.Module):
         self.in_dim = in_dim
         self.out_channel = out_channel
         self.mask_heldout = torch.zeros(batch_size, num_nodes, num_nodes) - torch.inf
-        self.mask_heldout = self.mask_heldout.cuda()
+        self.mask_heldout = self.mask_heldout.to(device)
 
     def forward(self, data):
         self.loss = 0
@@ -204,7 +205,7 @@ class DetourTransformerSingleSC(nn.Module):
         self.in_dim = in_dim
         self.out_channel = out_channel
         self.mask_heldout = torch.zeros(batch_size, num_nodes, num_nodes) - torch.inf
-        self.mask_heldout = self.mask_heldout.cuda()
+        self.mask_heldout = self.mask_heldout.to(device)
 
 
     def forward(self, data):

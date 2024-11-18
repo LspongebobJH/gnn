@@ -13,6 +13,7 @@ from torchvision import datasets, transforms
 from sklearn.preprocessing import OneHotEncoder
 import progressbar
 import tqdm
+from utils import device
 
 import CIVAE_src.model as MODEL
 import CIVAE_src.utils as UTIL
@@ -120,17 +121,17 @@ def fit(model, x_train, u_train, x_val, u_val,
     # training part
     mse_criterion = torch.nn.MSELoss()
     if device == 'cuda':
-        prior.cuda()
-        encoder.cuda()
-        decoder.cuda()
-        mse_criterion.cuda()
+        prior.to(device)
+        encoder.to(device)
+        decoder.to(device)
+        mse_criterion.to(device)
     for epoch in range(1, num_epoch+1):
         num_batch = 0
         for x_batch, u_batch in tqdm.tqdm(dataloader['train'],
                                          desc='[Epoch %d/%d] Training' % (epoch, num_epoch)):
             num_batch += 1
             if device == 'cuda':
-                x_batch, u_batch = x_batch.cuda(), u_batch.cuda()
+                x_batch, u_batch = x_batch.to(device), u_batch.to(device)
             x_batch += torch.randn_like(x_batch)*1e-2
 
             prior.train()
@@ -149,9 +150,9 @@ def fit(model, x_train, u_train, x_val, u_val,
 
             epsilon = torch.randn((z_mean.shape[0], z_mean.shape[1], M))
             if device == 'cuda':
-                post_sample = post_sample.cuda()
-                encoded_sample = encoded_sample.cuda()
-                epsilon = epsilon.cuda()
+                post_sample = post_sample.to(device)
+                encoded_sample = encoded_sample.to(device)
+                epsilon = epsilon.to(device)
 
             fire_rate_post, obs_log_var = decoder(post_sample)
             fire_rate_encoded, _ = decoder(encoded_sample)
@@ -226,7 +227,7 @@ def fit(model, x_train, u_train, x_val, u_val,
             for x_batch, u_batch in tqdm.tqdm(dataloader[datasetname],
                                          desc='[Epoch %d/%d] Computing loss terms on %s' % (epoch, num_epoch, datasetname)):
                 if device == 'cuda':
-                    x_batch, u_batch = x_batch.cuda(), u_batch.cuda()
+                    x_batch, u_batch = x_batch.to(device), u_batch.to(device)
 
                 # forward step
                 lam_mean, lam_log_var = prior(u_batch)
@@ -237,9 +238,9 @@ def fit(model, x_train, u_train, x_val, u_val,
 
                 epsilon = torch.randn((z_mean.shape[0], z_mean.shape[1], M))
                 if device == 'cuda':
-                    post_sample = post_sample.cuda()
-                    encoded_sample = encoded_sample.cuda()
-                    epsilon = epsilon.cuda()
+                    post_sample = post_sample.to(device)
+                    encoded_sample = encoded_sample.to(device)
+                    epsilon = epsilon.to(device)
 
                 fire_rate_post, obs_log_var = decoder(post_sample)
                 fire_rate_encoded, _ = decoder(encoded_sample)
@@ -401,7 +402,7 @@ def extract_feature(result_path, x):
     prior.eval(); encoder.eval(); decoder.eval()
     
     if device == 'cuda':
-        z_mean, z_log_var = encoder(x.cuda())
+        z_mean, z_log_var = encoder(x.to(device))
     elif device == 'cpu':
         z_mean, z_log_var = encoder(x)
     z_sample = UTIL.sampling(z_mean, z_log_var)
@@ -413,8 +414,8 @@ def generate_z(result_path, u):
     prior, encoder, decoder = saved_model['prior'], saved_model['encoder'], saved_model['decoder']
     prior.eval(); encoder.eval(); decoder.eval()
     
-    u = u.cuda() if device == 'cuda' else u
-    z_mean, z_log_var = prior(u.cuda())
+    u = u.to(device) if device == 'cuda' else u
+    z_mean, z_log_var = prior(u.to(device))
     return z_mean, z_log_var
     
     

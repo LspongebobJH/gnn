@@ -7,11 +7,11 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 from MHGCN_src import MHGCN
 from NeuroPath_src import DetourTransformer, Transformer, GAT, Vanilla
-from custom_src import VanillaFuse
+from custom_src import VanillaFuse, GATFuse
 from utils import set_random_seed, load_dataset, model_infer, \
     Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS, \
     FUSE_SINGLE_MODALITY_MODELS, \
-    to_pyg_single, split_pyg, to_pyg_fuse
+    to_pyg_single, split_pyg, to_pyg_fuse, device
 
 def pipe(configs: dict):
     hid_dim = configs['hid_dim']
@@ -25,7 +25,6 @@ def pipe(configs: dict):
     model_name = configs['model_name']
     reduce = configs['reduce']
     dropout = configs['dropout']
-    device='cuda:7'
 
     label_type = configs.get('label_type', 'regression')
     eval_type = configs.get('eval_type', 'split')
@@ -46,8 +45,8 @@ def pipe(configs: dict):
     if model_name == 'MHGCN':
         model = MHGCN(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, dropout=dropout)
 
-        adjs = adjs.cuda()
-        raw_Xs = raw_Xs.cuda()
+        adjs = adjs.to(device)
+        raw_Xs = raw_Xs.to(device)
         
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.1)
@@ -84,9 +83,13 @@ def pipe(configs: dict):
             model = VanillaFuse(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
                         nlayers=nlayers, dropout=dropout, nclass=out_dim, 
                         reduce_nodes=reduce, reduce_fuse=reduce_fuse)
+        elif model_name == 'GAT_fuse':
+            model = GATFuse(in_dim=in_dim, hid_dim=hid_dim, 
+                        nlayers=nlayers, dropout=dropout, nclass=out_dim, 
+                        reduce_nodes=reduce, reduce_fuse=reduce_fuse)
             
-    model = model.cuda()                            
-    labels = labels.cuda()
+    model = model.to(device)                            
+    labels = labels.to(device)
 
     if label_type == 'classification':
         loss_fn = nn.CrossEntropyLoss()
@@ -205,16 +208,18 @@ if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
     for model_name in ['NeuroPath', 'SGC', 'GAT', 'Transformer']:
-        model_name = 'GCN_fuse'
-        for seed in range(5):
+        model_name = 'GAT_fuse'
+        for seed in range(1):
             set_random_seed(seed)
             searchSpace = {
-                        "hid_dim": 64,
+                        # "hid_dim": 64,
+                        "hid_dim": 8,
                         "lr": 1e-3,
                         "epochs": 2000,
                         "patience": 10,
                         "wd": 0,
-                        "nlayers": 2,
+                        # "nlayers": 2,
+                        "nlayers": 1,
                         "split_args": {
                             'train_size': 0.6,
                             'valid_size': 0.2,
@@ -239,8 +244,8 @@ if __name__ == '__main__':
             valid.append(best_val_rmse)
             test.append(best_test_rmse)
 
-        with open(f'./logs/log_{log_idx}.txt', 'a') as f:
-            f.write(f"{searchSpace['model_name']}: ")
-            f.write(f'best_train_rmse: {np.mean(train):.4f}±{np.std(train):.4f} | '
-                    f'best_val_rmse: {np.mean(valid):.4f}±{np.std(valid):.4f} | '
-                    f'best_test_rmse: {np.mean(test):.4f}±{np.std(test):.4f}\n')
+        # with open(f'./logs/log_{log_idx}.txt', 'a') as f:
+        #     f.write(f"{searchSpace['model_name']}: ")
+        #     f.write(f'best_train_rmse: {np.mean(train):.4f}±{np.std(train):.4f} | '
+        #             f'best_val_rmse: {np.mean(valid):.4f}±{np.std(valid):.4f} | '
+        #             f'best_test_rmse: {np.mean(test):.4f}±{np.std(test):.4f}\n')

@@ -27,7 +27,7 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    value: NeuroPath
+    value: [GCN_fuse, SAGE_fuse, SGC_fuse]
   # modality:
   #   values: [sc, fc]
   # ratio:

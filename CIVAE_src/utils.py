@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from utils import device
 
 def compute_posterior(z_mean, z_log_var, lam_mean, lam_log_var):
     # q(z) = q(z|x)p(z|u) = N((mu1*var2+mu2*var1)/(var1+var2), var1*var2/(var1+var2));
@@ -14,8 +15,8 @@ def sampling(mean, log_var):
         epsilon = torch.randn(mean.shape)
         return mean + torch.exp(0.5 * log_var) * epsilon
     else:
-        epsilon = torch.randn(mean.shape).cuda()
-        return mean + torch.exp(0.5 * log_var).cuda() * epsilon
+        epsilon = torch.randn(mean.shape).to(device)
+        return mean + torch.exp(0.5 * log_var).to(device) * epsilon
 
 # Ref: https://github.com/edenton/svg/blob/master/train_svg_lp.py#L131-#L138
 def kl_criterion(mu1, log_var1, mu2, log_var2):

@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch_geometric.data import Batch, Data
 from time import time
 
-
+device = torch.cuda.current_device() if torch.cuda.is_available() else 'cpu'
 SINGLE_MODALITY_MODELS = ['GCN', 'SAGE', 'SGC', 'GAT', 'GIN', 'Transformer']
 FUSE_SINGLE_MODALITY_MODELS = [name + '_fuse' for name in SINGLE_MODALITY_MODELS]
 
@@ -63,7 +63,8 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         mu_lbls = data['mu_lbls']
         std_lbls = data['std_lbls']
     else:
-        data_path = '/home/jiahang/gnn/dataset'
+        # data_path = '/home/jiahang/gnn/dataset'
+        data_path = './dataset'
         path = os.path.join(data_path, 'FC_Fisher_Z_transformed.pkl')
         with open(path, 'rb') as f:
             data_FC = pickle.load(f)
@@ -175,11 +176,11 @@ class Evaluator:
         if label_type == 'classification':
             assert num_classes is not None
             self.acc, self.auroc, self.auprc = \
-                Accuracy(task="multiclass", num_classes=num_classes).cuda(), \
-                AUROC(task="multiclass", num_classes=num_classes).cuda(), \
-                AveragePrecision(task="multiclass", num_classes=num_classes).cuda()
+                Accuracy(task="multiclass", num_classes=num_classes).to(device), \
+                AUROC(task="multiclass", num_classes=num_classes).to(device), \
+                AveragePrecision(task="multiclass", num_classes=num_classes).to(device)
         else:
-            self.mse = MeanSquaredError().cuda()
+            self.mse = MeanSquaredError().to(device)
         self.label_type = label_type
 
     def evaluate(self, logits: torch.Tensor, labels: torch.Tensor):
@@ -272,13 +273,13 @@ def split_pyg(data_list: list, train_idx: list, valid_idx: list, test_idx: list)
     print("preprocessing pyg data list")
     time_st = time()
     train_data = [data_list[i] for i in train_idx]
-    train_data = Batch.from_data_list(train_data).cuda()
+    train_data = Batch.from_data_list(train_data).to(device)
 
     valid_data = [data_list[i] for i in valid_idx]
-    valid_data = Batch.from_data_list(valid_data).cuda()
+    valid_data = Batch.from_data_list(valid_data).to(device)
 
     test_data = [data_list[i] for i in test_idx]
-    test_data = Batch.from_data_list(test_data).cuda()
+    test_data = Batch.from_data_list(test_data).to(device)
 
     print(f"finish preprocessing: {time() - time_st:.2f}s")
     return train_data, valid_data, test_data

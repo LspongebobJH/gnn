@@ -63,14 +63,16 @@ class VanillaFuse(nn.Module):
             x = torch.concat([x_0, x_1], dim=-1)
         elif self.reduce_fuse == 'sum':
             x = x_0 + x_1
-        self.output(x)
+        x = self.output(x)
         return scatter(x, batch.batch, dim=0, reduce=self.reduce_fuse)
 
-class GAT(nn.Module):
-    def __init__(self, in_dim, hid_dim, nlayers, dropout, nclass=1, reduce='mean') -> None:
+class GATFuse(nn.Module):
+    def __init__(self, in_dim, hid_dim, nlayers, dropout, 
+                 nclass=1, reduce_nodes='mean', reduce_fuse='mean') -> None:
         super().__init__()
         self.dropout = dropout
-        self.reduce = reduce  # Control reduction method
+        self.reduce_nodes = reduce_nodes  # Control reduction method
+        self.reduce_fuse = reduce_fuse
         self.net = nn.ModuleList()
 
         # Input layer
@@ -87,14 +89,27 @@ class GAT(nn.Module):
             self.net.append(nn.Dropout(p=dropout))
 
         # Final layer to hidden dimension
-        self.net.append(GATConv(hid_dim * 2, nclass, heads=1))
+        self.net.append(GATConv(hid_dim * 2, hid_dim))
+
+        if self.reduce_fuse == 'concat':
+            self.output = nn.Linear(hid_dim * 2, nclass)
+        else:
+            self.output = nn.Linear(hid_dim, nclass)
 
     def forward(self, batch):
-        x = batch.x
+        x_0, x_1 = batch.x, batch.x
         for net in self.net:
             if isinstance(net, MessagePassing):
-                x = net(x, batch.edge_index)
+                x_0 = net(x_0, batch.edge_index_sc)
+                x_1 = net(x_1, batch.edge_index_fc)
             else:
-                x = net(x)
-
-        return scatter(x, batch.batch, dim=0, reduce=self.reduce)
+                x_0 = net(x_0)
+                x_1 = net(x_1)
+        if self.reduce_fuse == 'mean':
+            x = (x_0 + x_1) / 2
+        elif self.reduce_fuse == 'concat':
+            x = torch.concat([x_0, x_1], dim=-1)
+        elif self.reduce_fuse == 'sum':
+            x = x_0 + x_1
+        x = self.output(x)
+        return scatter(x, batch.batch, dim=0, reduce=self.reduce_fuse)

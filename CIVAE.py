@@ -9,14 +9,13 @@ import torch.nn as nn
 import wandb
 
 from MHGCN_src import MHGCN
-from utils import set_random_seed, load_dataset, Evaluator, EarlyStopping
+from utils import set_random_seed, load_dataset, Evaluator, EarlyStopping, device
 from sklearn import svm
 
 def pipe(configs):
     x_concat_adj = configs['x_concat_adj']
     epochs  = configs['epochs']
     split_args = configs['split_args']
-    device='cuda:0'
     label_type = 'regression'
 
     assert label_type in ['classification', 'regression']

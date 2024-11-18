@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.metrics import f1_score
 from sklearn.cluster import KMeans
 from sklearn.metrics import normalized_mutual_info_score, pairwise
+from utils import device
 
 
 def evaluate(embeds, idx_train, idx_val, idx_test, labels, device, isTest=True):
@@ -26,7 +27,7 @@ def evaluate(embeds, idx_train, idx_val, idx_test, labels, device, isTest=True):
     for _ in range(50):
         log = LogReg(hid_units, nb_classes)
         opt = torch.optim.Adam(log.parameters(), lr=0.01, weight_decay=0.0)
-        log.cuda()
+        log.to(device)
 
         val_accs = []; test_accs = []
         val_micro_f1s = []; test_micro_f1s = []

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import random
 import numpy as np
+from utils import device
 
 # classes to build NNs
 class Prior_conti(nn.Module):
@@ -111,6 +112,6 @@ class Decoder(nn.Module):
             obs_log_var = self.obs_log_var_net(one_tensor)
             return o, obs_log_var
         else:
-            one_tensor = torch.ones((1,1)).cuda()
+            one_tensor = torch.ones((1,1)).to(device)
             obs_log_var = self.obs_log_var_net(one_tensor)
             return o, obs_log_var

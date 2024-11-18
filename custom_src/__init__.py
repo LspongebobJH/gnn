@@ -1,1 +1,1 @@
-from .fuse_models import VanillaFuse
+from .fuse_models import VanillaFuse, GATFuse
