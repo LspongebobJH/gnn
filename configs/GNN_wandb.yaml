@@ -27,7 +27,7 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    value: [GCN_fuse_embed, SAGE_fuse_embed, SGC_fuse_embed]
+    values: [GCN_fuse_embed, SAGE_fuse_embed, SGC_fuse_embed]
   # modality:
   #   values: [sc, fc]
   # ratio:
