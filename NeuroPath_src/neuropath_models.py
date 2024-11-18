@@ -15,55 +15,55 @@ class DetourTransformer(nn.Module):
                 nclass,
                 heads: int = 2,
                 nlayer: int = 1,
-                node_sz: int=116,
-                in_channel: Union[int, Tuple[int, int]] = 10,
+                num_nodes: int=116,
+                in_dim: Union[int, Tuple[int, int]] = 10,
                 dropout: float = 0.1,
                 hiddim: int = 1024,
                 detour_type = 'node',
                 ) -> None:
         
         super(DetourTransformer, self).__init__()
-        org_in_channel = in_channel
-        if in_channel % heads != 0:
-            in_channel = in_channel  + heads - (in_channel % heads)
+        org_in_dim = in_dim
+        if in_dim % heads != 0:
+            in_dim = in_dim  + heads - (in_dim % heads)
         self.detour_type = detour_type
         self.nlayer = nlayer
-        self.node_sz = node_sz
+        self.num_nodes = num_nodes
 
-        # self.batchnorm = nn.BatchNorm1d(org_in_channel)
+        # self.batchnorm = nn.BatchNorm1d(org_in_dim)
             
         self.lin_first = nn.Sequential(
-            nn.Linear(org_in_channel, in_channel), 
-            nn.BatchNorm1d(in_channel), 
+            nn.Linear(org_in_dim, in_dim), 
+            nn.BatchNorm1d(in_dim), 
             nn.LeakyReLU()
         )
         self.lin_in = nn.Sequential(
-            nn.Linear(in_channel, hiddim), 
+            nn.Linear(in_dim, hiddim), 
             nn.BatchNorm1d(hiddim), 
             nn.LeakyReLU(),
         )
         
         self.net = nn.ModuleList([torch.nn.TransformerEncoder(
-            torch.nn.TransformerEncoderLayer(d_model=in_channel, nhead=heads, dim_feedforward=hiddim, dropout=dropout, batch_first=True),
-            num_layers=1,
+            torch.nn.TransformerEncoderLayer(d_model=in_dim, nhead=heads, dim_feedforward=hiddim, dropout=dropout, batch_first=True),
+            nlayers=1,
             norm=None
         ) for _ in range(nlayer)])
         self.net_fc = nn.ModuleList([torch.nn.TransformerEncoder(
-            torch.nn.TransformerEncoderLayer(d_model=in_channel, nhead=heads, dim_feedforward=hiddim, dropout=dropout, batch_first=True),
-            num_layers=1,
+            torch.nn.TransformerEncoderLayer(d_model=in_dim, nhead=heads, dim_feedforward=hiddim, dropout=dropout, batch_first=True),
+            nlayers=1,
             norm=None
         ) for _ in range(nlayer)])
         self.heads = heads
-        self.in_channel = in_channel
+        self.in_dim = in_dim
         self.fcsc_loss = nn.MSELoss()
 
-        self.classifier = Classifier(GCNConv, hiddim, nclass, node_sz)
+        self.classifier = Classifier(GCNConv, hiddim, nclass, num_nodes)
 
     def forward(self, data):
         node_feature = data.x
         # node_feature = self.batchnorm(node_feature)
         node_feature = self.lin_first(node_feature)
-        node_feature = node_feature.view(data.batch.max()+1, len(torch.where(data.batch==0)[0]), self.in_channel)
+        node_feature = node_feature.view(data.batch.max()+1, len(torch.where(data.batch==0)[0]), self.in_dim)
 
         adj = data.adj_sc
         adj_fc = data.adj_fc
@@ -83,8 +83,8 @@ class DetourTransformer(nn.Module):
         for i in range(self.nlayer):
             node_feature = self.net[i](node_feature, mask=multi_mask)
         
-        # return self.lin_in(node_feature.reshape(node_feature.shape[0] * node_feature.shape[1], self.in_channel))
-        h = self.lin_in(node_feature.reshape(node_feature.shape[0] * node_feature.shape[1], self.in_channel))
+        # return self.lin_in(node_feature.reshape(node_feature.shape[0] * node_feature.shape[1], self.in_dim))
+        h = self.lin_in(node_feature.reshape(node_feature.shape[0] * node_feature.shape[1], self.in_dim))
         return self.classifier(h, data.edge_index, data.batch).flatten()
 
 
@@ -93,8 +93,8 @@ class DetourTransformerSingleFC(nn.Module):
     def __init__(self, 
         heads: int = 2,
         nlayer: int = 1,
-        node_sz: int=116,
-        in_channel: Union[int, Tuple[int, int]] = 10,
+        num_nodes: int=116,
+        in_dim: Union[int, Tuple[int, int]] = 10,
         out_channel: int = 10,
         concat: bool = False,
         dek: int = 4,
@@ -109,50 +109,50 @@ class DetourTransformerSingleFC(nn.Module):
         *args, **kwargs) -> None:
         
         super(DetourTransformerSingleFC, self).__init__()
-        org_in_channel = in_channel
-        if in_channel % heads != 0:
-            in_channel = in_channel  + heads - (in_channel % heads)
+        org_in_dim = in_dim
+        if in_dim % heads != 0:
+            in_dim = in_dim  + heads - (in_dim % heads)
         self.detour_type = detour_type
         self.nlayer = nlayer
-        self.node_sz = node_sz
+        self.num_nodes = num_nodes
             
         self.lin_first = nn.Sequential(
-            nn.Linear(org_in_channel, in_channel), 
-            nn.BatchNorm1d(in_channel), 
+            nn.Linear(org_in_dim, in_dim), 
+            nn.BatchNorm1d(in_dim), 
             nn.LeakyReLU()
         )
         self.lin_in = nn.Sequential(
-            nn.Linear(in_channel, out_channel), 
+            nn.Linear(in_dim, out_channel), 
             nn.BatchNorm1d(out_channel), 
             nn.LeakyReLU(),
         )
         self.net = nn.ModuleList([torch.nn.TransformerEncoder(
-            torch.nn.TransformerEncoderLayer(d_model=in_channel, nhead=heads, dim_feedforward=hiddim, dropout=dropout, batch_first=True),
-            num_layers=1,
-            norm=None#nn.LayerNorm(in_channel)
+            torch.nn.TransformerEncoderLayer(d_model=in_dim, nhead=heads, dim_feedforward=hiddim, dropout=dropout, batch_first=True),
+            nlayers=1,
+            norm=None#nn.LayerNorm(in_dim)
         ) for _ in range(nlayer)])
 
         self.heads = heads
-        self.in_channel = in_channel
+        self.in_dim = in_dim
         self.out_channel = out_channel
-        self.mask_heldout = torch.zeros(batch_size, node_sz, node_sz) - torch.inf
-        self.mask_heldout = self.mask_heldout.to(device)
+        self.mask_heldout = torch.zeros(batch_size, num_nodes, num_nodes) - torch.inf
+        self.mask_heldout = self.mask_heldout.cuda()
 
     def forward(self, data):
         self.loss = 0
         node_feature = data.x
         node_feature = self.lin_first(node_feature)
-        node_feature = node_feature.view(data.batch.max()+1, len(torch.where(data.batch==0)[0]), self.in_channel)
+        node_feature = node_feature.view(data.batch.max()+1, len(torch.where(data.batch==0)[0]), self.in_dim)
 
         adj_fc = data.adj_fc
-        adj_fc[:, torch.arange(self.node_sz), torch.arange(self.node_sz)] = True
+        adj_fc[:, torch.arange(self.num_nodes), torch.arange(self.num_nodes)] = True
         mask_fc = self.mask_heldout[:len(adj_fc)]
         mask_fc[adj_fc] = 0
         mask_fc = mask_fc.repeat(self.heads, 1, 1)
         for i in range(self.nlayer):
             node_feature = self.net[i](node_feature, mask=mask_fc)
 
-        return self.lin_in(node_feature.reshape(node_feature.shape[0] * node_feature.shape[1], self.in_channel))
+        return self.lin_in(node_feature.reshape(node_feature.shape[0] * node_feature.shape[1], self.in_dim))
 
 
 
@@ -161,8 +161,8 @@ class DetourTransformerSingleSC(nn.Module):
     def __init__(self, 
         heads: int = 2,
         nlayer: int = 1,
-        node_sz: int=116,
-        in_channel: Union[int, Tuple[int, int]] = 10,
+        num_nodes: int=116,
+        in_dim: Union[int, Tuple[int, int]] = 10,
         out_channel: int = 10,
         concat: bool = False,
         dek: int = 4,
@@ -177,46 +177,46 @@ class DetourTransformerSingleSC(nn.Module):
         *args, **kwargs) -> None:
         
         super(DetourTransformerSingleSC, self).__init__()
-        org_in_channel = in_channel
-        if in_channel % heads != 0:
-            in_channel = in_channel  + heads - (in_channel % heads)
+        org_in_dim = in_dim
+        if in_dim % heads != 0:
+            in_dim = in_dim  + heads - (in_dim % heads)
         self.detour_type = detour_type
         self.nlayer = nlayer
-        self.node_sz = node_sz
+        self.num_nodes = num_nodes
             
         self.lin_first = nn.Sequential(
-            nn.Linear(org_in_channel, in_channel), 
-            nn.BatchNorm1d(in_channel), 
+            nn.Linear(org_in_dim, in_dim), 
+            nn.BatchNorm1d(in_dim), 
             nn.LeakyReLU()
         )
         self.lin_in = nn.Sequential(
-            nn.Linear(in_channel, out_channel), 
+            nn.Linear(in_dim, out_channel), 
             nn.BatchNorm1d(out_channel), 
             nn.LeakyReLU(),
         )
 
         self.net = nn.ModuleList([torch.nn.TransformerEncoder(
-            torch.nn.TransformerEncoderLayer(d_model=in_channel, nhead=heads, dim_feedforward=hiddim, dropout=dropout, batch_first=True),
-            num_layers=1,
-            norm=None#nn.LayerNorm(in_channel)
+            torch.nn.TransformerEncoderLayer(d_model=in_dim, nhead=heads, dim_feedforward=hiddim, dropout=dropout, batch_first=True),
+            nlayers=1,
+            norm=None#nn.LayerNorm(in_dim)
         ) for _ in range(nlayer)])
         self.heads = heads
-        self.in_channel = in_channel
+        self.in_dim = in_dim
         self.out_channel = out_channel
-        self.mask_heldout = torch.zeros(batch_size, node_sz, node_sz) - torch.inf
-        self.mask_heldout = self.mask_heldout.to(device)
+        self.mask_heldout = torch.zeros(batch_size, num_nodes, num_nodes) - torch.inf
+        self.mask_heldout = self.mask_heldout.cuda()
 
 
     def forward(self, data):
         self.loss = 0
         node_feature = data.x
         node_feature = self.lin_first(node_feature)
-        node_feature = node_feature.view(data.batch.max()+1, len(torch.where(data.batch==0)[0]), self.in_channel)
+        node_feature = node_feature.view(data.batch.max()+1, len(torch.where(data.batch==0)[0]), self.in_dim)
 
         adj = data.adj_sc
         adj_fc = data.adj_fc
-        adj[:, torch.arange(self.node_sz), torch.arange(self.node_sz)] = True
-        adj_fc[:, torch.arange(self.node_sz), torch.arange(self.node_sz)] = True
+        adj[:, torch.arange(self.num_nodes), torch.arange(self.num_nodes)] = True
+        adj_fc[:, torch.arange(self.num_nodes), torch.arange(self.num_nodes)] = True
         org_adj = adj
         multi_mask = []
         for _ in range(self.heads):
@@ -229,6 +229,6 @@ class DetourTransformerSingleSC(nn.Module):
         for i in range(self.nlayer):
             node_feature = self.net[i](node_feature, mask=multi_mask)
 
-        return self.lin_in(node_feature.reshape(node_feature.shape[0] * node_feature.shape[1], self.in_channel))
+        return self.lin_in(node_feature.reshape(node_feature.shape[0] * node_feature.shape[1], self.in_dim))
 
     

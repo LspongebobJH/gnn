@@ -5,6 +5,7 @@ import torch
 from copy import deepcopy
 from tqdm import tqdm
 import random
+import os
 
 from torchmetrics import Accuracy, AUROC, AveragePrecision, MeanSquaredError
 from sklearn.model_selection import train_test_split, KFold
@@ -27,7 +28,7 @@ def model_infer(model, model_name, **kwargs):
     elif model_name in ['NeuroPath', 'GCN', 'SAGE', 'SGC', 'GAT', 'Transformer']:
         data_list, idx = kwargs['data_list'], kwargs['idx']
         data_list = [data_list[i] for i in idx]
-        data = Batch.from_data_list(data_list).to(device)
+        data = Batch.from_data_list(data_list).cuda()
         logits = model(data)
     return logits.flatten()
 
@@ -45,87 +46,115 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
     if eval_type == 'split':
         assert split_args is not None
 
-    data_path = '/home/jiahang/gnn/dataset'
-    path = os.path.join(data_path, 'FC_Fisher_Z_transformed.pkl')
-    with open(path, 'rb') as f:
-        data_FC = pickle.load(f)
+    file_path = './dataset/processed_data.pkl'
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as f:
+            data = pickle.load(f)
+        adjs = data['adjs']
+        raw_Xs = data['raw_Xs']
+        labels = data['labels']
+        splits = data['splits']
+        mu_lbls = data['mu_lbls']
+        std_lbls = data['std_lbls']
+    else:
+        data_path = '/home/jiahang/gnn/dataset'
+        path = os.path.join(data_path, 'FC_Fisher_Z_transformed.pkl')
+        with open(path, 'rb') as f:
+            data_FC = pickle.load(f)
 
-    path = os.path.join(data_path, 'SC.pkl')
-    with open(path, 'rb') as f:
-        data_SC = pickle.load(f)
+        path = os.path.join(data_path, 'SC.pkl')
+        with open(path, 'rb') as f:
+            data_SC = pickle.load(f)
 
-    path = os.path.join(data_path, 'T1.pkl')
-    with open(path, 'rb') as f:
-        data_raw_X = pickle.load(f)
+        path = os.path.join(data_path, 'T1.pkl')
+        with open(path, 'rb') as f:
+            data_raw_X = pickle.load(f)
 
-    path = os.path.join(data_path, 'demo.pkl')
-    with open(path, 'rb') as f:
-        data_labels = pickle.load(f)
-    
-    # NOTE note that only data_SC has full keys, is it a semi-supervised task?
-    ## we only take graph which have labels.
-    adjs = torch.zeros((len(data_labels), 2, 200, 200))
-    labels = torch.zeros(len(data_labels))
-    raw_Xs = torch.zeros((len(data_labels), 200, 9))
-    mask = []
-    for i, name in tqdm(enumerate(data_labels.keys())):
-        if name not in data_SC.keys() or name not in data_FC.keys() or name not in data_raw_X.keys():
-            continue
-        if 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
-            continue
-        adjs[i, 0] = torch.tensor(data_SC[name])
-        adjs[i, 1] = torch.tensor(data_FC[name])
+        path = os.path.join(data_path, 'demo.pkl')
+        with open(path, 'rb') as f:
+            data_labels = pickle.load(f)
+        
+        # NOTE note that only data_SC has full keys, is it a semi-supervised task?
+        ## we only take graph which have labels and both SC, FC modalities.
+        adjs = torch.zeros((len(data_labels), 2, 200, 200))
+        labels = torch.zeros(len(data_labels))
+        raw_Xs = torch.zeros((len(data_labels), 200, 9))
+        mask = []
+        for i, name in tqdm(enumerate(data_labels.keys())):
+            if name not in data_SC.keys() or name not in data_FC.keys() or name not in data_raw_X.keys():
+                continue
+            if 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
+                continue
+            adjs[i, 0] = torch.tensor(data_SC[name])
+            adjs[i, 1] = torch.tensor(data_FC[name])
 
-        labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
+            labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
 
-        raw_X = data_raw_X[name].drop(columns=['StructName'])
-        raw_X = raw_X.to_numpy().astype(float)
-        raw_Xs[i] = torch.tensor(raw_X)
+            raw_X = data_raw_X[name].drop(columns=['StructName'])
+            raw_X = raw_X.to_numpy().astype(float)
+            raw_Xs[i] = torch.tensor(raw_X)
 
-        mask.append(i)
-    adjs = adjs[mask]
-    labels = labels[mask]
-    raw_Xs = raw_Xs[mask]
+            mask.append(i)
+        adjs = adjs[mask]
+        labels = labels[mask]
+        raw_Xs = raw_Xs[mask]
+        mu, std = 0., 1.
 
-    if label_type == 'classification':
-        labels_class = torch.zeros_like(labels, dtype=torch.long)
-        for i, label in enumerate(labels.unique()):
-            labels_class[labels == label] = i
-        labels = labels_class
+        if label_type == 'classification':
+            labels_class = torch.zeros_like(labels, dtype=torch.long)
+            for i, label in enumerate(labels.unique()):
+                labels_class[labels == label] = i
+            labels = labels_class
 
-    if eval_type == 'split':
-        train_size, valid_size, test_size = \
-            split_args['train_size'], split_args['valid_size'], split_args['test_size']
-        idx = np.arange(len(labels))
-        train_valid_idx, test_idx = \
-            train_test_split(idx, test_size=test_size)
-        train_idx, valid_idx = \
-            train_test_split(train_valid_idx, 
-                             test_size=valid_size / (train_size + valid_size))
-        splits = {
-            'train_idx': train_idx,
-            'valid_idx': valid_idx,
-            'test_idx': test_idx,
+        else:
+            mu_lbls, std_lbls = labels.mean(), labels.std()
+            labels = (labels - mu_lbls) / std_lbls
+
+        if eval_type == 'split':
+            train_size, valid_size, test_size = \
+                split_args['train_size'], split_args['valid_size'], split_args['test_size']
+            idx = np.arange(len(labels))
+            train_valid_idx, test_idx = \
+                train_test_split(idx, test_size=test_size)
+            train_idx, valid_idx = \
+                train_test_split(train_valid_idx, 
+                                test_size=valid_size / (train_size + valid_size))
+            splits = {
+                'train_idx': train_idx,
+                'valid_idx': valid_idx,
+                'test_idx': test_idx,
+            }
+        elif eval_type == 'cross':
+            kfold = KFold(n_splits=5, shuffle=True)
+            splits = list(kfold.split(X=idx))
+        
+        batchnorm = nn.BatchNorm1d(raw_Xs.shape[-1], affine=False)
+        layernorm = nn.LayerNorm([adjs.shape[-2], adjs.shape[-1]], elementwise_affine=False)
+
+        original_feat_shape = raw_Xs.shape
+        raw_Xs = batchnorm(
+            raw_Xs.reshape(-1, raw_Xs.shape[-1])
+        ).reshape(original_feat_shape)
+
+        original_adjs_shape = adjs.shape
+        adjs = layernorm(
+            adjs.reshape(-1, adjs.shape[-2], adjs.shape[-1])
+        ).reshape(original_adjs_shape)
+
+        data = {
+            'adjs': adjs,
+            'raw_Xs': raw_Xs,
+            'labels': labels,
+            'splits': splits,
+            'mu_lbls': mu_lbls,
+            'std_lbls': std_lbls
         }
-    elif eval_type == 'cross':
-        kfold = KFold(n_splits=5, shuffle=True)
-        splits = list(kfold.split(X=idx))
-    
-    batchnorm = nn.BatchNorm1d(raw_Xs.shape[-1], affine=False)
-    layernorm = nn.LayerNorm([adjs.shape[-2], adjs.shape[-1]], elementwise_affine=False)
 
-    original_feat_shape = raw_Xs.shape
-    raw_Xs = batchnorm(
-        raw_Xs.reshape(-1, raw_Xs.shape[-1])
-    ).reshape(original_feat_shape)
+        with open(file_path, 'wb') as f:
+            pickle.dump(data, f)
 
-    original_adjs_shape = adjs.shape
-    layernorm(
-        adjs.reshape(-1, adjs.shape[-2], adjs.shape[-1])
-    ).reshape(original_adjs_shape)
-
-    assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
-    return adjs, raw_Xs, labels, splits
+        assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
+    return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
 
 def set_random_seed(seed):
     random.seed(seed)
@@ -134,22 +163,25 @@ def set_random_seed(seed):
     torch.cuda.manual_seed(seed)
 
 class Evaluator:
-    def __init__(self, label_type, num_classes, device):
+    def __init__(self, mu_lbls, std_lbls, label_type, num_classes, device):
         assert label_type in ['classification', 'regression']
+        self.mu_lbls, self.std_lbls = mu_lbls, std_lbls
         if label_type == 'classification':
             assert num_classes is not None
             self.acc, self.auroc, self.auprc = \
-                Accuracy(task="multiclass", num_classes=num_classes).to(device), \
-                AUROC(task="multiclass", num_classes=num_classes).to(device), \
-                AveragePrecision(task="multiclass", num_classes=num_classes).to(device)
+                Accuracy(task="multiclass", num_classes=num_classes).cuda(), \
+                AUROC(task="multiclass", num_classes=num_classes).cuda(), \
+                AveragePrecision(task="multiclass", num_classes=num_classes).cuda()
         else:
-            self.mse = MeanSquaredError().to(device)
+            self.mse = MeanSquaredError().cuda()
         self.label_type = label_type
 
     def evaluate(self, logits: torch.Tensor, labels: torch.Tensor):
         if self.label_type == 'classification':
             return self.acc(logits, labels), self.auroc(logits, labels), self.auprc(logits, labels)
         else:
+            labels = labels * self.std_lbls + self.mu_lbls
+            logits = logits * self.std_lbls + self.mu_lbls
             return self.mse(logits.squeeze(), labels).sqrt()
 
 class EarlyStopping:

@@ -4,10 +4,12 @@ import wandb
 import numpy as np
 
 from MHGCN_src import MHGCN
-from NeuroPath_src import DetourTransformer, Transformer, GCN, SAGE, SGC, GAT, to_pyg
+from NeuroPath_src import DetourTransformer, Transformer, GAT, to_pyg, Vanilla
 from utils import set_random_seed, load_dataset, model_infer, Evaluator, EarlyStopping
 
-def pipe(configs):
+SINGLE_MODALITY_MODELS = ['GCN', 'SAGE', 'SGC', 'GAT', 'Transformer']
+
+def pipe(configs: dict):
     hid_dim = configs['hid_dim']
     nlayers = configs['nlayers']
     lr = configs['lr']
@@ -17,10 +19,12 @@ def pipe(configs):
     split_args = configs['split_args']
     use_wandb = configs['use_wandb']
     model_name = configs['model_name']
+    reduce = configs['reduce']
+    dropout = configs['dropout']
     device='cuda:7'
 
-    label_type = configs['label_type']
-    eval_type = configs['eval_type']
+    label_type = configs.get('label_type', 'regression')
+    eval_type = configs.get('eval_type', 'split')
 
     assert label_type in ['classification', 'regression']
     if label_type == 'classification':
@@ -28,30 +32,38 @@ def pipe(configs):
     else:
         out_dim = 1
 
-    adjs, raw_Xs, labels, splits = load_dataset(split_args=split_args, label_type=label_type, eval_type=eval_type)
+    adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = \
+        load_dataset(split_args=split_args, label_type=label_type, eval_type=eval_type)
     train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']    
     in_dim = raw_Xs.shape[-1]
 
 
     data_list = None
     if model_name == 'MHGCN':
-        model = MHGCN(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, adj_shape=[adjs.shape[-2], adjs.shape[-1]])
-    elif model_name in ['NeuroPath', 'GCN', 'SAGE', 'SGC', 'GAT', 'Transformer']:
-        data_list = to_pyg(raw_Xs, labels, adjs, ratio_sc=0.1, ratio_fc=0.5, option='fc')
+        model = MHGCN(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, 
+                      adj_shape=[adjs.shape[-2], adjs.shape[-1]])
+    elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
+        ratio_sc = configs.get('ratio_sc', 0.1)
+        ratio_fc = configs.get('ratio_fc', 0.5)
+        ratio = configs.get('ratio_fc', 0.5)
+
+        if model_name in SINGLE_MODALITY_MODELS:
+            data_list = to_pyg(raw_Xs, labels, adjs, ratio_sc=ratio, ratio_fc=ratio, option=configs['modality'])
+        else:
+            data_list = to_pyg(raw_Xs, labels, adjs, ratio_sc=ratio_sc, ratio_fc=ratio_fc, option='fc')
+        
         if model_name == 'NeuroPath':
-            model = DetourTransformer(node_sz = raw_Xs.shape[1], in_channel = in_dim, nclass = out_dim, hiddim = hid_dim, 
+            model = DetourTransformer(num_nodes = raw_Xs.shape[1], in_dim = in_dim, nclass = out_dim, hiddim = hid_dim, 
                                     nlayer = nlayers)
-        elif model_name == 'GCN':
-            model = GCN(in_channel = in_dim, hiddim = hid_dim, nclass = out_dim, node_sz = raw_Xs.shape[1])
-        elif model_name == 'SAGE':
-            model = SAGE(in_channel = in_dim, hiddim = hid_dim, nclass = out_dim, node_sz = raw_Xs.shape[1])
-        elif model_name == 'SGC':
-            model = SGC(in_channel = in_dim, hiddim = hid_dim, nclass = out_dim, node_sz = raw_Xs.shape[1])
+        elif model_name in ['GCN', 'SAGE', 'SGC']:
+            model = Vanilla(model_name=model_name, in_dim=in_dim, hiddim=hid_dim, 
+                            nlayers=nlayers, dropout=dropout, reduce=reduce, nclass=out_dim)
         elif model_name == 'GAT':
-            model = GAT(in_channel = in_dim, hiddim = hid_dim, nclass = out_dim, node_sz = raw_Xs.shape[1])
+            model = GAT(in_dim=in_dim, hiddim=hid_dim, nlayers=nlayers, 
+                        dropout=dropout, reduce=reduce, nclass=out_dim)
         elif model_name == 'Transformer':
-            model = Transformer(in_channel = in_dim, hiddim = hid_dim, nclass = out_dim, node_sz = raw_Xs.shape[1])
-    model = model.to(device)
+            model = Transformer(in_dim = in_dim, hiddim = hid_dim, nclass = out_dim)
+    model = model.cuda()
                                 
 
     if label_type == 'classification':
@@ -61,20 +73,22 @@ def pipe(configs):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
     earlystop = EarlyStopping(patience)
 
-    evaluator = Evaluator(label_type=label_type, num_classes=out_dim, device=device)
+    evaluator = Evaluator(mu_lbls=mu_lbls, std_lbls=std_lbls, 
+                          label_type=label_type, num_classes=out_dim, device=device)
 
-    adjs = adjs.to(device)
-    raw_Xs = raw_Xs.to(device)
-    labels = labels.to(device)
+    adjs = adjs.cuda()
+    raw_Xs = raw_Xs.cuda()
+    labels = labels.cuda()
 
     best_train_rmse = torch.inf
     best_val_rmse = torch.inf
     best_test_rmse = torch.inf
     cnt = 0
     for epoch in range(epochs):
+        model.train()
         if epoch == 1000 and  model_name == 'MHGCN':
             for g in optimizer.param_groups:
-                g['lr'] = 1e-3
+                g['lr'] *= 1e-1
         model.train()
         logits = model_infer(model, model_name, adjs=adjs, raw_Xs=raw_Xs, 
                              data_list=data_list, idx=train_idx, device=device)
@@ -83,6 +97,7 @@ def pipe(configs):
         loss.backward()
         optimizer.step()
 
+        model.eval()
         if label_type == 'classification':
             train_acc, train_auroc, train_auprc = evaluator.evaluate(logits, labels[train_idx])
             print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train Acc {train_acc:.4f} | Train Auroc {train_auroc:.4f} | "
@@ -126,7 +141,7 @@ def pipe(configs):
             else:
                 logits_valid = model_infer(model, model_name, adjs=adjs, raw_Xs=raw_Xs, 
                                            data_list=data_list, idx=valid_idx, device=device)
-                logits_test =model_infer(model, model_name, adjs=adjs, raw_Xs=raw_Xs, 
+                logits_test = model_infer(model, model_name, adjs=adjs, raw_Xs=raw_Xs, 
                                          data_list=data_list, idx=test_idx, device=device)
                 valid_rmse = evaluator.evaluate(logits_valid, labels[valid_idx])
                 test_rmse = evaluator.evaluate(logits_test, labels[test_idx])
@@ -141,15 +156,20 @@ def pipe(configs):
                 else:
                     cnt += 1
 
-                if cnt >= patience:
-                    break
-
                 if use_wandb:
                     wandb.log({
                         'valid_rmse': valid_rmse,
                         'test_rmse': test_rmse,
                     })
-        
+
+                if cnt >= patience:
+                    break
+    if use_wandb:
+        wandb.log({
+            'best_train_rmse': best_train_rmse,
+            'best_val_rmse': best_val_rmse,
+            'best_test_rmse': best_test_rmse,
+        })
     return best_train_rmse.item(), best_val_rmse.item(), best_test_rmse.item()
         # earlystop.step_score(val_acc, model)
         # print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train Acc {train_acc:.4f} | Val Acc {val_acc:.4f} | "
@@ -168,11 +188,11 @@ if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
     for model_name in ['NeuroPath', 'SGC', 'GAT', 'Transformer']:
+        model_name = 'GCN'
         for seed in range(5):
             set_random_seed(seed)
             searchSpace = {
                         "hid_dim": 128,
-                        "l": 3,
                         "lr": 1e-3,
                         "epochs": 2000,
                         "patience": 10,
@@ -183,10 +203,12 @@ if __name__ == '__main__':
                             'valid_size': 0.2,
                             'test_size': 0.2,
                         },
+                        "dropout": 0.5,
+                        "modality": 'sc',
+                        "ratio": 0.3,
+                        "reduce": "mean",
                         "use_wandb": False,
                         "model_name": model_name,
-                        "eval_type": "split",
-                        "label_type": "regression"
                     }
             if searchSpace['use_wandb']:
                 run = wandb.init(
