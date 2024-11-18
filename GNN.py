@@ -6,8 +6,12 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 from MHGCN_src import MHGCN
-from NeuroPath_src import DetourTransformer, Transformer, GAT, to_pyg, Vanilla, split_pyg
-from utils import set_random_seed, load_dataset, model_infer, Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS
+from NeuroPath_src import DetourTransformer, Transformer, GAT, Vanilla
+from custom_src import VanillaFuse
+from utils import set_random_seed, load_dataset, model_infer, \
+    Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS, \
+    FUSE_SINGLE_MODALITY_MODELS, \
+    to_pyg_single, split_pyg, to_pyg_fuse
 
 def pipe(configs: dict):
     hid_dim = configs['hid_dim']
@@ -51,9 +55,9 @@ def pipe(configs: dict):
         ratio = configs.get('ratio_fc', 0.5)
 
         if model_name in SINGLE_MODALITY_MODELS:
-            data_list = to_pyg(raw_Xs, labels, adjs, ratio_sc=ratio, ratio_fc=ratio, option=configs['modality'])
+            data_list = to_pyg_single(raw_Xs, labels, adjs, ratio_sc=ratio, ratio_fc=ratio, option=configs['modality'])
         else:
-            data_list = to_pyg(raw_Xs, labels, adjs, ratio_sc=ratio_sc, ratio_fc=ratio_fc, option='fc')
+            data_list = to_pyg_single(raw_Xs, labels, adjs, ratio_sc=ratio_sc, ratio_fc=ratio_fc, option='fc')
         train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
 
         if model_name == 'NeuroPath':
@@ -67,6 +71,19 @@ def pipe(configs: dict):
                         dropout=dropout, reduce=reduce, nclass=out_dim)
         elif model_name == 'Transformer':
             model = Transformer(in_dim = in_dim, hid_dim = hid_dim, nclass = out_dim)
+    
+    elif model_name in FUSE_SINGLE_MODALITY_MODELS:
+        ratio_sc = configs.get('ratio_sc', 0.1)
+        ratio_fc = configs.get('ratio_fc', 0.5)
+        data_list = to_pyg_fuse(raw_Xs, labels, adjs, ratio_sc=ratio_sc, ratio_fc=ratio_fc)
+        train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
+        
+        reduce_fuse = configs.get('reduce_fc', 'mean')
+
+        if model_name in [name + '_fuse' for name in ['GCN', 'SAGE', 'SGC', 'GIN']]:
+            model = VanillaFuse(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
+                        nlayers=nlayers, dropout=dropout, nclass=out_dim, 
+                        reduce_nodes=reduce, reduce_fuse=reduce_fuse)
             
     model = model.cuda()                            
     labels = labels.cuda()
@@ -188,7 +205,7 @@ if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
     for model_name in ['NeuroPath', 'SGC', 'GAT', 'Transformer']:
-        model_name = 'GAT'
+        model_name = 'GCN_fuse'
         for seed in range(5):
             set_random_seed(seed)
             searchSpace = {

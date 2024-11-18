@@ -13,7 +13,12 @@ from torch_geometric.data import Batch
 from torch_scatter import scatter
 import torch.nn as nn
 
+from torch_geometric.data import Batch, Data
+from time import time
+
+
 SINGLE_MODALITY_MODELS = ['GCN', 'SAGE', 'SGC', 'GAT', 'GIN', 'Transformer']
+FUSE_SINGLE_MODALITY_MODELS = [name + '_fuse' for name in SINGLE_MODALITY_MODELS]
 
 def model_infer(model, model_name, **kwargs):
     """
@@ -26,13 +31,15 @@ def model_infer(model, model_name, **kwargs):
     if model_name == 'MHGCN':
         adjs, idx, raw_Xs = kwargs['adjs'], kwargs['idx'], kwargs['raw_Xs']
         logits = model(adjs[idx], raw_Xs[idx])
-    elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
+    elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS or \
+         model_name in FUSE_SINGLE_MODALITY_MODELS:
         data = kwargs['data']
         logits = model(data)
     return logits.flatten()
 
 def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, cross_args: dict = None):
     """
+
     label_type: if classification, all labels(int) are converted into its index. If regression, use original values.
         note: even if it's a regression task in nature, if labels are int, sometimes classification loss function,
         such as cross-entropy loss, has better performance.
@@ -238,3 +245,57 @@ def adj_weight2bin(adjs, ratio_sc, ratio_fc):
     adjs_1 = adjs_1.reshape(original_shape)
 
     return adjs_0, adjs_1
+
+def to_pyg_single(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float, option: str):
+    adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
+
+    if option == 'sc':
+        adjs_target = adjs_0
+    elif option == 'fc':
+        adjs_target = adjs_1
+    
+    data_list = []
+    for i in tqdm(range(len(adjs_target))):
+        data = {
+            'x': raw_Xs[i],
+            'y': labels[i],
+            'edge_index': torch.stack(torch.nonzero(adjs_target[i], as_tuple=True)),
+            'adj_sc': adjs_0[i].unsqueeze(0),
+            'adj_fc': adjs_1[i].unsqueeze(0),
+        }
+        data = Data(**data)
+        data_list.append(data)
+
+    return data_list
+
+def split_pyg(data_list: list, train_idx: list, valid_idx: list, test_idx: list):
+    print("preprocessing pyg data list")
+    time_st = time()
+    train_data = [data_list[i] for i in train_idx]
+    train_data = Batch.from_data_list(train_data).cuda()
+
+    valid_data = [data_list[i] for i in valid_idx]
+    valid_data = Batch.from_data_list(valid_data).cuda()
+
+    test_data = [data_list[i] for i in test_idx]
+    test_data = Batch.from_data_list(test_data).cuda()
+
+    print(f"finish preprocessing: {time() - time_st:.2f}s")
+    return train_data, valid_data, test_data
+
+def to_pyg_fuse(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float):
+    adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
+    
+    data_list = []
+    for i in tqdm(range(len(adjs_0))):
+        data = {
+            'x': raw_Xs[i],
+            'y': labels[i],
+            'edge_index_sc': torch.stack(torch.nonzero(adjs_0[i], as_tuple=True)),
+            'edge_index_fc': torch.stack(torch.nonzero(adjs_1[i], as_tuple=True)),
+        }
+        data = Data(**data)
+        data_list.append(data)
+
+    return data_list
+

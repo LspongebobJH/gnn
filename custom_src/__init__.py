@@ -1,0 +1,1 @@
+from .fuse_models import VanillaFuse
