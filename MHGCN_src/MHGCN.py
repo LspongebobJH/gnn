@@ -39,17 +39,10 @@ class GraphConvolution(Module):
             return output
         
 class MHGCN(nn.Module):
-    def __init__(self, nfeat, nlayers, nhid, out, adj_shape, dropout = 0.5):
+    def __init__(self, nfeat, nlayers, nhid, out, dropout = 0.5):
         super(MHGCN, self).__init__()
 
         self.out = out
-        # feature embedding
-        # self.batchnorm = nn.BatchNorm1d(nfeat)
-
-        # self.layernorm = nn.ModuleList([
-        #     nn.LayerNorm(adj_shape),
-        #     nn.LayerNorm(adj_shape)
-        # ])
         
         self.layers = nn.ModuleList()
         self.layers.append(GraphConvolution(nfeat, nhid))
@@ -63,28 +56,17 @@ class MHGCN(nn.Module):
         torch.nn.init.uniform_(self.weight_b, a=0, b=0.1)
 
     def forward(self, A_batch: torch.Tensor, feature: torch.Tensor):
-        # A_batch_new = torch.zeros_like(A_batch).to(A_batch.device)
-        # A_batch_new[:, 0] = self.layernorm[0](A_batch[:, 0])
-        # A_batch_new[:, 1] = self.layernorm[1](A_batch[:, 1])
-        # A_batch = A_batch_new
         A_batch = A_batch.permute(0, 2, 3, 1)
         final_A = (A_batch @ self.weight_b).squeeze()
-
-
-        # original_feat_shape = feature.shape
-        # feature = self.batchnorm(
-        #     feature.reshape(-1, feature.shape[-1])
-        # ).reshape(original_feat_shape)
-
         embeds = []
         for layer in self.layers:
             feature = self.relu(self.dropout(layer(feature, final_A)))
             embeds.append(feature)
         embeds = torch.stack(embeds, dim=0).mean(0)
-        output = self.relu(self.dropout(self.output(embeds)))
-        output = output.mean(dim=1)
+        embeds = embeds.mean(dim=1)
+        embeds = self.output(embeds)
 
         if self.out == 1: # regression task
-            output.squeeze()
+            embeds.squeeze()
         # Average pooling
-        return output
+        return embeds

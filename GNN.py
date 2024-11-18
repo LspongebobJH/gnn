@@ -4,7 +4,7 @@ import wandb
 import numpy as np
 
 from MHGCN_src import MHGCN
-from NeuroPath_src import DetourTransformer, Transformer, GAT, to_pyg, Vanilla
+from NeuroPath_src import DetourTransformer, Transformer, GAT, to_pyg, Vanilla, split_pyg
 from utils import set_random_seed, load_dataset, model_infer, Evaluator, EarlyStopping
 
 SINGLE_MODALITY_MODELS = ['GCN', 'SAGE', 'SGC', 'GAT', 'Transformer']
@@ -38,10 +38,9 @@ def pipe(configs: dict):
     in_dim = raw_Xs.shape[-1]
 
 
-    data_list = None
+    train_data, valid_data, test_data = None, None, None
     if model_name == 'MHGCN':
-        model = MHGCN(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, 
-                      adj_shape=[adjs.shape[-2], adjs.shape[-1]])
+        model = MHGCN(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, dropout=dropout)
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.1)
         ratio_fc = configs.get('ratio_fc', 0.5)
@@ -51,7 +50,8 @@ def pipe(configs: dict):
             data_list = to_pyg(raw_Xs, labels, adjs, ratio_sc=ratio, ratio_fc=ratio, option=configs['modality'])
         else:
             data_list = to_pyg(raw_Xs, labels, adjs, ratio_sc=ratio_sc, ratio_fc=ratio_fc, option='fc')
-        
+        train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
+
         if model_name == 'NeuroPath':
             model = DetourTransformer(num_nodes = raw_Xs.shape[1], in_dim = in_dim, nclass = out_dim, hiddim = hid_dim, 
                                     nlayer = nlayers)
@@ -90,8 +90,8 @@ def pipe(configs: dict):
             for g in optimizer.param_groups:
                 g['lr'] *= 1e-1
         model.train()
-        logits = model_infer(model, model_name, adjs=adjs, raw_Xs=raw_Xs, 
-                             data_list=data_list, idx=train_idx, device=device)
+        logits = model_infer(model, model_name, adjs=adjs, idx=train_idx,
+                             raw_Xs=raw_Xs, data=train_data)
         loss = loss_fn(logits, labels[train_idx])
         optimizer.zero_grad()
         loss.backward()
@@ -119,10 +119,10 @@ def pipe(configs: dict):
         if epoch % 5 == 0:
             model.eval()
             if label_type == 'classification':
-                logits_valid = model_infer(model, model_name, adjs=adjs, raw_Xs=raw_Xs, 
-                                           data_list=data_list, idx=valid_idx, device=device)
-                logits_test = model_infer(model, model_name, adjs=adjs, raw_Xs=raw_Xs, 
-                                          data_list=data_list, idx=test_idx, device=device)
+                logits_valid = model_infer(model, model_name, adjs=adjs, idx=valid_idx,
+                                           raw_Xs=raw_Xs, data=valid_data)
+                logits_test = model_infer(model, model_name, adjs=adjs, idx=test_idx,
+                                          raw_Xs=raw_Xs, data=test_data)
                 valid_acc, valid_auroc, valid_auprc = evaluator.evaluate(logits_valid, labels[valid_idx])
                 test_acc, test_auroc, test_auprc = evaluator.evaluate(logits_test, labels[test_idx])
                 print(f"Valid Acc {valid_acc:.4f} | Valid Auroc {valid_auroc:.4f} | Valid Auprc: {valid_auprc:.4f}")
@@ -139,10 +139,10 @@ def pipe(configs: dict):
                         'test_auprc': test_auprc,
                     })
             else:
-                logits_valid = model_infer(model, model_name, adjs=adjs, raw_Xs=raw_Xs, 
-                                           data_list=data_list, idx=valid_idx, device=device)
-                logits_test = model_infer(model, model_name, adjs=adjs, raw_Xs=raw_Xs, 
-                                         data_list=data_list, idx=test_idx, device=device)
+                logits_valid = model_infer(model, model_name, adjs=adjs, idx=valid_idx,
+                                           raw_Xs=raw_Xs, data=valid_data)
+                logits_test = model_infer(model, model_name, adjs=adjs, idx=test_idx,
+                                          raw_Xs=raw_Xs, data=test_data)
                 valid_rmse = evaluator.evaluate(logits_valid, labels[valid_idx])
                 test_rmse = evaluator.evaluate(logits_test, labels[test_idx])
 
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
     for model_name in ['NeuroPath', 'SGC', 'GAT', 'Transformer']:
-        model_name = 'GCN'
+        model_name = 'MHGCN'
         for seed in range(5):
             set_random_seed(seed)
             searchSpace = {

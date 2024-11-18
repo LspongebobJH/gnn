@@ -21,14 +21,11 @@ def model_infer(model, model_name, **kwargs):
     data_lisr: list type of pyg data
     device
     """
-    device = kwargs['device']
     if model_name == 'MHGCN':
         adjs, idx, raw_Xs = kwargs['adjs'], kwargs['idx'], kwargs['raw_Xs']
         logits = model(adjs[idx], raw_Xs[idx])
     elif model_name in ['NeuroPath', 'GCN', 'SAGE', 'SGC', 'GAT', 'Transformer']:
-        data_list, idx = kwargs['data_list'], kwargs['idx']
-        data_list = [data_list[i] for i in idx]
-        data = Batch.from_data_list(data_list).cuda()
+        data = kwargs['data']
         logits = model(data)
     return logits.flatten()
 

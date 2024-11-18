@@ -43,6 +43,7 @@ if __name__ == '__main__':
 
     if args.wandb == 'sweep':
         sweep_id = wandb.sweep(sweep=config, project=project_name)
+        print(f"sweep id: {sweep_id}")
         wandb.agent(sweep_id, function=main)
     elif args.wandb == 'normal':
         main(args.seed, config=config)

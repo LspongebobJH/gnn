@@ -4,6 +4,7 @@ from torch_geometric.data import Batch, Data
 from utils import adj_weight2bin
 
 from tqdm import tqdm
+from time import time
 
 def to_pyg(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float, option: str):
     adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
@@ -26,3 +27,19 @@ def to_pyg(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio
         data_list.append(data)
 
     return data_list
+
+def split_pyg(data_list: list, train_idx: list, valid_idx: list, test_idx: list):
+    print("preprocessing pyg data list")
+    time_st = time()
+    train_data = [data_list[i] for i in train_idx]
+    train_data = Batch.from_data_list(train_data).cuda()
+
+    valid_data = [data_list[i] for i in valid_idx]
+    valid_data = Batch.from_data_list(valid_data).cuda()
+
+    test_data = [data_list[i] for i in test_idx]
+    test_data = Batch.from_data_list(test_data).cuda()
+
+    print(f"finish preprocessing: {time() - time_st:.2f}s")
+    return train_data, valid_data, test_data
+
