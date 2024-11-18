@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import wandb
 import numpy as np
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 from MHGCN_src import MHGCN
 from NeuroPath_src import DetourTransformer, Transformer, GAT, to_pyg, Vanilla, split_pyg
-from utils import set_random_seed, load_dataset, model_infer, Evaluator, EarlyStopping
-
-SINGLE_MODALITY_MODELS = ['GCN', 'SAGE', 'SGC', 'GAT', 'Transformer']
+from utils import set_random_seed, load_dataset, model_infer, Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS
 
 def pipe(configs: dict):
     hid_dim = configs['hid_dim']
@@ -41,6 +41,10 @@ def pipe(configs: dict):
     train_data, valid_data, test_data = None, None, None
     if model_name == 'MHGCN':
         model = MHGCN(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, dropout=dropout)
+
+        adjs = adjs.cuda()
+        raw_Xs = raw_Xs.cuda()
+        
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.1)
         ratio_fc = configs.get('ratio_fc', 0.5)
@@ -53,18 +57,19 @@ def pipe(configs: dict):
         train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
 
         if model_name == 'NeuroPath':
-            model = DetourTransformer(num_nodes = raw_Xs.shape[1], in_dim = in_dim, nclass = out_dim, hiddim = hid_dim, 
-                                    nlayer = nlayers)
-        elif model_name in ['GCN', 'SAGE', 'SGC']:
-            model = Vanilla(model_name=model_name, in_dim=in_dim, hiddim=hid_dim, 
+            model = DetourTransformer(num_nodes = raw_Xs.shape[1], in_dim = in_dim, nclass = out_dim, hid_dim = hid_dim, 
+                                    nlayers = nlayers, dropout=dropout)
+        elif model_name in ['GCN', 'SAGE', 'SGC', 'GIN']:
+            model = Vanilla(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
                             nlayers=nlayers, dropout=dropout, reduce=reduce, nclass=out_dim)
         elif model_name == 'GAT':
-            model = GAT(in_dim=in_dim, hiddim=hid_dim, nlayers=nlayers, 
+            model = GAT(in_dim=in_dim, hid_dim=hid_dim, nlayers=nlayers, 
                         dropout=dropout, reduce=reduce, nclass=out_dim)
         elif model_name == 'Transformer':
-            model = Transformer(in_dim = in_dim, hiddim = hid_dim, nclass = out_dim)
-    model = model.cuda()
-                                
+            model = Transformer(in_dim = in_dim, hid_dim = hid_dim, nclass = out_dim)
+            
+    model = model.cuda()                            
+    labels = labels.cuda()
 
     if label_type == 'classification':
         loss_fn = nn.CrossEntropyLoss()
@@ -76,10 +81,6 @@ def pipe(configs: dict):
     evaluator = Evaluator(mu_lbls=mu_lbls, std_lbls=std_lbls, 
                           label_type=label_type, num_classes=out_dim, device=device)
 
-    adjs = adjs.cuda()
-    raw_Xs = raw_Xs.cuda()
-    labels = labels.cuda()
-
     best_train_rmse = torch.inf
     best_val_rmse = torch.inf
     best_test_rmse = torch.inf
@@ -89,7 +90,6 @@ def pipe(configs: dict):
         if epoch == 1000 and  model_name == 'MHGCN':
             for g in optimizer.param_groups:
                 g['lr'] *= 1e-1
-        model.train()
         logits = model_infer(model, model_name, adjs=adjs, idx=train_idx,
                              raw_Xs=raw_Xs, data=train_data)
         loss = loss_fn(logits, labels[train_idx])
@@ -110,7 +110,7 @@ def pipe(configs: dict):
                 })
         else:
             train_rmse = evaluator.evaluate(logits, labels[train_idx])
-            print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train RMSE {train_rmse:.4f}")
+            print(f"Epoch {epoch:05d} | Loss (calib RMSE) {loss.item():.4f} | Train RMSE {train_rmse:.4f}")
             if use_wandb:
                 wandb.log({
                     'train_rmse': train_rmse,
@@ -188,16 +188,16 @@ if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
     for model_name in ['NeuroPath', 'SGC', 'GAT', 'Transformer']:
-        model_name = 'MHGCN'
+        model_name = 'GAT'
         for seed in range(5):
             set_random_seed(seed)
             searchSpace = {
-                        "hid_dim": 128,
+                        "hid_dim": 64,
                         "lr": 1e-3,
                         "epochs": 2000,
                         "patience": 10,
                         "wd": 0,
-                        "nlayers": 1,
+                        "nlayers": 2,
                         "split_args": {
                             'train_size': 0.6,
                             'valid_size': 0.2,

@@ -1,12 +1,12 @@
 program: run_wandb.py
 method: grid
-name: sweep-NeuroPath
+name: sweep-GAT
 metric:
   goal: minimize
   name: best_val_rmse
 parameters:
   hid_dim:
-    values: [64, 128, 256]
+    values: [64, 128]
   lr:
     values: [1e-2, 1e-3]
   epochs:
@@ -18,7 +18,7 @@ parameters:
   dropout:
     value: 0.5
   nlayers:
-    values: [1, 2]
+    values: [2, 3]
   split_args:
     value:
       train_size: 0.6
@@ -27,14 +27,14 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    value: NeuroPath
-  # modality:
-  #   values: [sc, fc]
-  # ratio:
+    value: GAT
+  modality:
+    values: [sc, fc]
+  ratio:
+    values: [0.2, 0.8]
+  # ratio_sc:
   #   values: [0.2, 0.8]
-  ratio_sc:
-    values: [0.2, 0.8]
-  ratio_fc:
-    values: [0.2, 0.8]
+  # ratio_fc:
+  #   values: [0.2, 0.8]
   reduce:
     value: mean

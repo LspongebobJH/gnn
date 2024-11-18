@@ -2,7 +2,7 @@ import wandb
 import yaml
 from argparse import ArgumentParser
 
-from utils import set_random_seed
+from utils import set_random_seed, SINGLE_MODALITY_MODELS
 
 project_name = 'graph_test'
 
@@ -18,7 +18,7 @@ def main(seed=0, config=None):
         wandb.init(project=project_name)
     config = wandb.config
     if config.model_name in \
-        ['MHGCN', 'NeuroPath', 'GCN', 'SAGE', 'SGC', 'GAT', 'Transformer']:
+        ['MHGCN', 'NeuroPath'] + SINGLE_MODALITY_MODELS:
         from GNN import pipe
     elif config.model_name in ['CIVAE']:
         from CIVAE import pipe

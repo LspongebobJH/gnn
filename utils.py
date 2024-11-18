@@ -13,6 +13,8 @@ from torch_geometric.data import Batch
 from torch_scatter import scatter
 import torch.nn as nn
 
+SINGLE_MODALITY_MODELS = ['GCN', 'SAGE', 'SGC', 'GAT', 'GIN', 'Transformer']
+
 def model_infer(model, model_name, **kwargs):
     """
     adjs: adj matrices
@@ -24,7 +26,7 @@ def model_infer(model, model_name, **kwargs):
     if model_name == 'MHGCN':
         adjs, idx, raw_Xs = kwargs['adjs'], kwargs['idx'], kwargs['raw_Xs']
         logits = model(adjs[idx], raw_Xs[idx])
-    elif model_name in ['NeuroPath', 'GCN', 'SAGE', 'SGC', 'GAT', 'Transformer']:
+    elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         data = kwargs['data']
         logits = model(data)
     return logits.flatten()
