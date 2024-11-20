@@ -11,7 +11,7 @@ from custom_src import VanillaFuse, GATFuse
 from utils import set_random_seed, load_dataset, model_infer, \
     Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS, \
     FUSE_SINGLE_MODALITY_MODELS, \
-    to_pyg_single, split_pyg, to_pyg_fuse_embed, device
+    to_pyg_single, split_pyg, to_pyg_fuse, device, get_fuse_type
 
 def pipe(configs: dict):
     hid_dim = configs['hid_dim']
@@ -51,19 +51,22 @@ def pipe(configs: dict):
         raw_Xs = raw_Xs.to(device)
         
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
-        ratio_sc = configs.get('ratio_sc', 0.1)
-        ratio_fc = configs.get('ratio_fc', 0.5)
-        ratio = configs.get('ratio_fc', 0.5)
+        ratio_sc = configs['ratio_sc']
+        ratio_fc = configs['ratio_fc']
+        ratio = configs['ratio']
 
         if model_name in SINGLE_MODALITY_MODELS:
-            data_list = to_pyg_single(raw_Xs, labels, adjs, ratio_sc=ratio, ratio_fc=ratio, option=configs['modality'])
-        else:
-            data_list = to_pyg_single(raw_Xs, labels, adjs, ratio_sc=ratio_sc, ratio_fc=ratio_fc, option='fc')
+            data_list = to_pyg_single(raw_Xs, labels, adjs, 
+                                      ratio_sc=ratio, ratio_fc=ratio, option=configs['modality'])
+        else: # NeuroPath
+            data_list = to_pyg_single(raw_Xs, labels, adjs, 
+                                      ratio_sc=ratio_sc, ratio_fc=ratio_fc, option='fc')
         train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
 
         if model_name == 'NeuroPath':
-            model = DetourTransformer(num_nodes = raw_Xs.shape[1], in_dim = in_dim, nclass = out_dim, hid_dim = hid_dim, 
-                                    nlayers = nlayers, dropout=dropout)
+            model = DetourTransformer(num_nodes = raw_Xs.shape[1], in_dim = in_dim, 
+                                      nclass = out_dim, hid_dim = hid_dim, 
+                                      nlayers = nlayers, dropout=dropout)
         elif model_name in ['GCN', 'SAGE', 'SGC', 'GIN']:
             model = Vanilla(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
                             nlayers=nlayers, dropout=dropout, reduce=reduce, nclass=out_dim)
@@ -74,21 +77,27 @@ def pipe(configs: dict):
             model = Transformer(in_dim = in_dim, hid_dim = hid_dim, nclass = out_dim)
     
     elif model_name in FUSE_SINGLE_MODALITY_MODELS:
-        ratio_sc = configs.get('ratio_sc', 0.1)
-        ratio_fc = configs.get('ratio_fc', 0.5)
-        data_list = to_pyg_fuse_embed(raw_Xs, labels, adjs, ratio_sc=ratio_sc, ratio_fc=ratio_fc)
-        train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
-        
-        reduce_fuse_embed = configs.get('reduce_fc', 'mean')
+        ratio_sc = configs['ratio_sc']
+        ratio_fc = configs['ratio_fc']
+        ratio = configs['ratio']
+        reduce_fuse = configs['reduce_fuse']
 
-        if model_name in [name + '_fuse_embed' for name in ['GCN', 'SAGE', 'SGC', 'GIN']]:
+        fuse_type = get_fuse_type(model_name)
+        data_list = to_pyg_fuse(raw_Xs, labels, adjs, 
+                                fuse_type=fuse_type, reduce_fuse=reduce_fuse,
+                                ratio_sc=ratio_sc, ratio_fc=ratio_fc, ratio=ratio)
+        train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
+
+        if 'GAT' in model_name:
+            model = GATFuse(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
+                        nlayers=nlayers, dropout=dropout, nclass=out_dim, 
+                        reduce_nodes=reduce, reduce_fuse=reduce_fuse)
+            
+        else:
             model = VanillaFuse(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
                         nlayers=nlayers, dropout=dropout, nclass=out_dim, 
-                        reduce_nodes=reduce, reduce_fuse_embed=reduce_fuse_embed)
-        elif model_name == 'GAT_fuse_embed':
-            model = GATFuse(in_dim=in_dim, hid_dim=hid_dim, 
-                        nlayers=nlayers, dropout=dropout, nclass=out_dim, 
-                        reduce_nodes=reduce, reduce_fuse_embed=reduce_fuse_embed)
+                        reduce_nodes=reduce, reduce_fuse=reduce_fuse)
+            
             
     model = model.to(device)                            
     labels = labels.to(device)
@@ -209,7 +218,7 @@ if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
     for model_name in ['NeuroPath', 'SGC', 'GAT', 'Transformer']:
-        model_name = 'GCN'
+        model_name = 'GAT_fuse_graph'
         for seed in range(1):
             set_random_seed(seed)
             searchSpace = {
@@ -228,8 +237,11 @@ if __name__ == '__main__':
                         },
                         "dropout": 0.5,
                         "modality": 'sc',
-                        "ratio": 0.3,
+                        "ratio_sc": 0.2,
+                        "ratio_fc": 0.2,
+                        "ratio": 0.2,
                         "reduce": "mean",
+                        "reduce_fuse": "or",
                         "use_wandb": False,
                         "model_name": model_name,
                     }

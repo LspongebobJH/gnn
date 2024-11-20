@@ -8,7 +8,7 @@ patience: 5
 ratio_fc: 0.8
 ratio_sc: 0.2
 reduce: mean
-reduce_fuse_embed: concat
+reduce_fuse: concat
 split_args:
   test_size: 0.2
   train_size: 0.6

@@ -18,7 +18,10 @@ from time import time
 
 device = torch.cuda.current_device() if torch.cuda.is_available() else 'cpu'
 SINGLE_MODALITY_MODELS = ['GCN', 'SAGE', 'SGC', 'GAT', 'GIN', 'Transformer']
-FUSE_SINGLE_MODALITY_MODELS = [name + '_fuse_embed' for name in SINGLE_MODALITY_MODELS]
+FUSE_SINGLE_MODALITY_MODELS = \
+    [name + '_fuse_embed' for name in SINGLE_MODALITY_MODELS] + \
+    [name + '_fuse_graph' for name in SINGLE_MODALITY_MODELS] + \
+    [name + '_fuse_pred' for name in SINGLE_MODALITY_MODELS]
 
 def model_infer(model, model_name, **kwargs):
     """
@@ -233,19 +236,29 @@ def evaluate(g, feat, labels, mask, model: torch.nn.Module):
         correct = torch.sum(indices == labels)
         return correct.item() * 1.0 / len(labels)
 
-def adj_weight2bin(adjs, ratio_sc, ratio_fc):
-    topk_0 = int(adjs.shape[-2] * adjs.shape[-1] * ratio_sc)
-    topk_1 = int(adjs.shape[-2] * adjs.shape[-1] * ratio_fc)
-    original_shape = [adjs.shape[0], adjs.shape[2], adjs.shape[3]]
-    adjs = adjs.flatten(-2)
-    idx_0 = torch.topk(adjs[:, 0].abs(), topk_0, dim=-1)[1] # TODO(jiahang): do we need abs?
-    idx_1 = torch.topk(adjs[:, 1].abs(), topk_1, dim=-1)[1]
-    adjs_0 = scatter(torch.ones_like(idx_0), idx_0).int()
-    adjs_1 = scatter(torch.ones_like(idx_1), idx_1).int()
-    adjs_0 = adjs_0.reshape(original_shape)
-    adjs_1 = adjs_1.reshape(original_shape)
+def adj_weight2bin(adjs, ratio_sc, ratio_fc, single_modal=False):
+    if single_modal:
+        assert ratio_sc == ratio_fc # only one ratio is needed
+        topk = int(adjs.shape[-2] * adjs.shape[-1] * ratio_sc)
+        original_shape = adjs.shape
+        adjs = adjs.flatten(-2)
+        idx = torch.topk(adjs, topk, dim=-1)[1]
+        adjs = scatter(torch.ones_like(idx), idx).int()
+        return adjs.reshape(original_shape)
 
-    return adjs_0, adjs_1
+    if adjs.shape[1] == 2:
+        topk_0 = int(adjs.shape[-2] * adjs.shape[-1] * ratio_sc)
+        topk_1 = int(adjs.shape[-2] * adjs.shape[-1] * ratio_fc)
+        original_shape = [adjs.shape[0], adjs.shape[2], adjs.shape[3]]
+        adjs = adjs.flatten(-2)
+        idx_0 = torch.topk(adjs[:, 0], topk_0, dim=-1)[1]
+        idx_1 = torch.topk(adjs[:, 1], topk_1, dim=-1)[1]
+        adjs_0 = scatter(torch.ones_like(idx_0), idx_0).int()
+        adjs_1 = scatter(torch.ones_like(idx_1), idx_1).int()
+        adjs_0 = adjs_0.reshape(original_shape)
+        adjs_1 = adjs_1.reshape(original_shape)
+
+        return adjs_0, adjs_1
 
 def to_pyg_single(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float, option: str):
     adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
@@ -284,19 +297,53 @@ def split_pyg(data_list: list, train_idx: list, valid_idx: list, test_idx: list)
     print(f"finish preprocessing: {time() - time_st:.2f}s")
     return train_data, valid_data, test_data
 
-def to_pyg_fuse_embed(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float):
-    adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
-    
-    data_list = []
-    for i in tqdm(range(len(adjs_0))):
-        data = {
-            'x': raw_Xs[i],
-            'y': labels[i],
-            'edge_index_sc': torch.stack(torch.nonzero(adjs_0[i], as_tuple=True)),
-            'edge_index_fc': torch.stack(torch.nonzero(adjs_1[i], as_tuple=True)),
-        }
-        data = Data(**data)
-        data_list.append(data)
+def to_pyg_fuse(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, 
+                fuse_type: str, reduce_fuse: str, 
+                ratio_sc: float, ratio_fc: float, ratio: float):
+    if fuse_type == 'fuse_graph':
+        if reduce_fuse == 'mean':
+            adjs = adjs.mean(dim=1)
+            adjs = adj_weight2bin(adjs, ratio, ratio, single_modal=True)
+        elif reduce_fuse == 'sum':
+            adjs = adjs.sum(dim=1)
+            adjs = adj_weight2bin(adjs, ratio, ratio, single_modal=True)
+        elif reduce_fuse == 'and':
+            adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
+            adjs = adjs_0 * adjs_1
+        elif reduce_fuse == 'or':
+            adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
+            adjs = torch.logical_or(adjs_0, adjs_1).int()
+        data_list = []
+        for i in tqdm(range(len(adjs_0))):
+            data = {
+                'x': raw_Xs[i],
+                'y': labels[i],
+                'edge_index': torch.stack(torch.nonzero(adjs[i], as_tuple=True)),
+            }
+            data = Data(**data)
+            data_list.append(data)
+
+    elif fuse_type in ['fuse_embed', 'fuse_pred']:
+        adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
+        data_list = []
+        for i in tqdm(range(len(adjs_0))):
+            data = {
+                'x': raw_Xs[i],
+                'y': labels[i],
+                'edge_index_sc': torch.stack(torch.nonzero(adjs_0[i], as_tuple=True)),
+                'edge_index_fc': torch.stack(torch.nonzero(adjs_1[i], as_tuple=True)),
+            }
+            data = Data(**data)
+            data_list.append(data)
 
     return data_list
+
+def get_fuse_type(model_name: str):
+    if 'fuse_embed' in model_name:
+        fuse_type = 'fuse_embed'
+    elif 'fuse_graph' in model_name:
+        fuse_type = 'fuse_graph'
+    if 'fuse_pred' in model_name:
+        fuse_type = 'fuse_pred'
+    return fuse_type
 

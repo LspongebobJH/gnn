@@ -6,7 +6,7 @@ metric:
   name: best_val_rmse
 parameters:
   hid_dim:
-    values: [64, 128]
+    values: [32, 64]
   lr:
     values: [1e-2, 1e-3]
   epochs:
@@ -18,7 +18,7 @@ parameters:
   dropout:
     value: 0.5
   nlayers:
-    values: [2, 3]
+    values: [1, 2]
   split_args:
     value:
       train_size: 0.6
@@ -27,7 +27,7 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    values: [GCN_fuse_graph, SAGE_fuse_graph]
+    values: [GAT_fuse_graph]
   # modality:
   #   values: [sc, fc]
   ratio:

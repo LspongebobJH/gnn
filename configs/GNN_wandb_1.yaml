@@ -1,12 +1,12 @@
 program: run_wandb.py
 method: grid
-name: sweep-gat-fuse
+name: sweep-fuse-graph
 metric:
   goal: minimize
   name: best_val_rmse
 parameters:
   hid_dim:
-    values: [32, 64]
+    values: [64, 128]
   lr:
     values: [1e-2, 1e-3]
   epochs:
@@ -27,16 +27,16 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    value: GAT_fuse_embed
+    values: [SGC_fuse_graph]
   # modality:
   #   values: [sc, fc]
-  # ratio:
-  #   values: [0.2, 0.8]
+  ratio:
+    values: [0.2, 0.8]
   ratio_sc:
     values: [0.2, 0.8]
   ratio_fc:
     values: [0.2, 0.8]
   reduce:
     value: mean
-  reduce_fuse_embed:
-    values: [mean, concat, sum]
+  reduce_fuse:
+    values: [mean, sum, or, and]
