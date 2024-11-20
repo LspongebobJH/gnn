@@ -108,7 +108,8 @@ def pipe(configs: dict):
     cnt = 0
     for epoch in range(epochs):
         model.train()
-        if epoch == 1000 and  model_name == 'MHGCN':
+        # if epoch == 1000 and  model_name == 'MHGCN':
+        if epoch == 1000:
             for g in optimizer.param_groups:
                 g['lr'] *= 1e-1
         logits = model_infer(model, model_name, adjs=adjs, idx=train_idx,
