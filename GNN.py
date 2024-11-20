@@ -20,6 +20,8 @@ def pipe(configs: dict):
     wd = configs['wd']
     epochs  = configs['epochs']
     patience = configs['patience']
+    if patience == -1:
+        patience = torch.inf
     split_args = configs['split_args']
     use_wandb = configs['use_wandb']
     model_name = configs['model_name']
@@ -96,7 +98,6 @@ def pipe(configs: dict):
     else:
         loss_fn = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
-    earlystop = EarlyStopping(patience)
 
     evaluator = Evaluator(mu_lbls=mu_lbls, std_lbls=std_lbls, 
                           label_type=label_type, num_classes=out_dim, device=device)
