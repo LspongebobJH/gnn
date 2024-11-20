@@ -1,11 +1,12 @@
 #!/bin/bash
 
 # seeds=( {1..5..1} )
-models=( GCN SAGE SGC GAT )
+models=( GAT )
 for model in "${models[@]}"; do
     CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 0 &
     CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 1 &
     CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 2 &
+    wait
     CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 3 &
     CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 4 &
     wait
