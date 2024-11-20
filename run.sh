@@ -22,5 +22,5 @@
 # CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/SAGE_fuse_embed_best.yaml --project_name exp_1 --seed 3 &
 # CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/SAGE_fuse_embed_best.yaml --project_name exp_1 --seed 4 &
 
-CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/test.yaml --project_name epoch_test &
+# CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/test.yaml --project_name epoch_test &
 CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/test_1.yaml --project_name epoch_test &
