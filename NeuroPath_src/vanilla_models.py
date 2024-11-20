@@ -88,7 +88,7 @@ class Vanilla(nn.Module):
 
     def forward(self, batch):
         x = batch.x
-        for net in self.net[:-1]:
+        for net in self.net:
             if isinstance(net, MessagePassing):
                 x = net(x, batch.edge_index)
             else:

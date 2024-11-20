@@ -209,7 +209,7 @@ if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
     for model_name in ['NeuroPath', 'SGC', 'GAT', 'Transformer']:
-        model_name = 'GAT_fuse_embed'
+        model_name = 'GCN'
         for seed in range(1):
             set_random_seed(seed)
             searchSpace = {
