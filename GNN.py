@@ -241,7 +241,7 @@ if __name__ == '__main__':
                         "ratio_fc": 0.2,
                         "ratio": 0.2,
                         "reduce": "mean",
-                        "reduce_fuse": "or",
+                        "reduce_fuse": "mean",
                         "use_wandb": False,
                         "model_name": model_name,
                     }

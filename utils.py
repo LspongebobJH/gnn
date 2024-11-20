@@ -314,7 +314,7 @@ def to_pyg_fuse(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor,
             adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)
             adjs = torch.logical_or(adjs_0, adjs_1).int()
         data_list = []
-        for i in tqdm(range(len(adjs_0))):
+        for i in tqdm(range(len(adjs))):
             data = {
                 'x': raw_Xs[i],
                 'y': labels[i],
