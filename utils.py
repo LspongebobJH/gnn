@@ -38,7 +38,7 @@ def model_infer(model, model_name, **kwargs):
          model_name in FUSE_SINGLE_MODALITY_MODELS:
         data = kwargs['data']
         logits = model(data)
-    return logits.flatten()
+    return logits.squeeze()
 
 def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, cross_args: dict = None):
     """
@@ -55,7 +55,7 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
     if eval_type == 'split':
         assert split_args is not None
 
-    file_path = './dataset/processed_data.pkl'
+    file_path = f'./dataset/processed_data_{label_type}_{eval_type}.pkl'
     if os.path.exists(file_path):
         with open(file_path, 'rb') as f:
             data = pickle.load(f)
@@ -108,8 +108,8 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         adjs = adjs[mask]
         labels = labels[mask]
         raw_Xs = raw_Xs[mask]
-        mu, std = 0., 1.
 
+        mu_lbls, std_lbls = None, None
         if label_type == 'classification':
             labels_class = torch.zeros_like(labels, dtype=torch.long)
             for i, label in enumerate(labels.unique()):
@@ -157,7 +157,7 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             'labels': labels,
             'splits': splits,
             'mu_lbls': mu_lbls,
-            'std_lbls': std_lbls
+            'std_lbls': std_lbls,
         }
 
         with open(file_path, 'wb') as f:

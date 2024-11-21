@@ -31,16 +31,16 @@ def pipe(configs: dict):
     label_type = configs.get('label_type', 'regression')
     eval_type = configs.get('eval_type', 'split')
 
+    adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = \
+        load_dataset(split_args=split_args, label_type=label_type, eval_type=eval_type)
+    train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']    
+    in_dim = raw_Xs.shape[-1]
+
     assert label_type in ['classification', 'regression']
     if label_type == 'classification':
         out_dim = (max(labels)+1).item()
     else:
         out_dim = 1
-
-    adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = \
-        load_dataset(split_args=split_args, label_type=label_type, eval_type=eval_type)
-    train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']    
-    in_dim = raw_Xs.shape[-1]
 
 
     train_data, valid_data, test_data = None, None, None
@@ -217,45 +217,45 @@ def pipe(configs: dict):
 if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
-    for model_name in ['NeuroPath', 'SGC', 'GAT', 'Transformer']:
-        model_name = 'GAT_fuse_graph'
-        for seed in range(1):
-            set_random_seed(seed)
-            searchSpace = {
-                        # "hid_dim": 64,
-                        "hid_dim": 8,
-                        "lr": 1e-3,
-                        "epochs": 2000,
-                        "patience": 10,
-                        "wd": 0,
-                        # "nlayers": 2,
-                        "nlayers": 1,
-                        "split_args": {
-                            'train_size': 0.6,
-                            'valid_size': 0.2,
-                            'test_size': 0.2,
-                        },
-                        "dropout": 0.5,
-                        "modality": 'sc',
-                        "ratio_sc": 0.2,
-                        "ratio_fc": 0.2,
-                        "ratio": 0.2,
-                        "reduce": "mean",
-                        "reduce_fuse": "mean",
-                        "use_wandb": False,
-                        "model_name": model_name,
-                    }
-            if searchSpace['use_wandb']:
-                run = wandb.init(
-                    # Set the project where this run will be logged
-                    project="multiplex gnn",
-                    # Track hyperparameters and run metadata
-                    config=searchSpace
-                )
-            best_train_rmse, best_val_rmse, best_test_rmse = pipe(searchSpace)
-            train.append(best_train_rmse)
-            valid.append(best_val_rmse)
-            test.append(best_test_rmse)
+    model_name = 'GCN'
+    for seed in range(1):
+        set_random_seed(seed)
+        searchSpace = {
+                    # "hid_dim": 64,
+                    "hid_dim": 8,
+                    "lr": 1e-3,
+                    "epochs": 2000,
+                    "patience": 10,
+                    "wd": 1e-1,
+                    # "nlayers": 2,
+                    "nlayers": 1,
+                    "split_args": {
+                        'train_size': 0.5,
+                        'valid_size': 0.3,
+                        'test_size': 0.2,
+                    },
+                    "dropout": 0.5,
+                    "modality": 'sc',
+                    "ratio_sc": 0.2,
+                    "ratio_fc": 0.2,
+                    "ratio": 0.2,
+                    "reduce": "mean",
+                    "reduce_fuse": "mean",
+                    "use_wandb": False,
+                    "model_name": model_name,
+                    "label_type": "classification"
+                }
+        if searchSpace['use_wandb']:
+            run = wandb.init(
+                # Set the project where this run will be logged
+                project="multiplex gnn",
+                # Track hyperparameters and run metadata
+                config=searchSpace
+            )
+        best_train_rmse, best_val_rmse, best_test_rmse = pipe(searchSpace)
+        train.append(best_train_rmse)
+        valid.append(best_val_rmse)
+        test.append(best_test_rmse)
 
         # with open(f'./logs/log_{log_idx}.txt', 'a') as f:
         #     f.write(f"{searchSpace['model_name']}: ")
