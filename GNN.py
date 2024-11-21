@@ -222,16 +222,16 @@ if __name__ == '__main__':
         set_random_seed(seed)
         searchSpace = {
                     # "hid_dim": 64,
-                    "hid_dim": 8,
+                    "hid_dim": 4,
                     "lr": 1e-3,
                     "epochs": 2000,
                     "patience": 10,
-                    "wd": 1e-1,
+                    "wd": 1e-2,
                     # "nlayers": 2,
                     "nlayers": 1,
                     "split_args": {
-                        'train_size': 0.5,
-                        'valid_size': 0.3,
+                        'train_size': 0.6,
+                        'valid_size': 0.2,
                         'test_size': 0.2,
                     },
                     "dropout": 0.5,
