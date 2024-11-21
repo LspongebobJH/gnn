@@ -30,8 +30,8 @@ parameters:
     values: [GCN_fuse_pred, SAGE_fuse_pred]
   # modality:
   #   values: [sc, fc]
-  # ratio:
-  #   values: [0.2, 0.8]
+  ratio:
+    value: 0.2
   ratio_sc:
     values: [0.2, 0.8]
   ratio_fc:
