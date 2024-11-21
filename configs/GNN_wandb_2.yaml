@@ -1,6 +1,6 @@
 program: run_wandb.py
 method: grid
-name: sweep-fuse-graph
+name: sweep-fuse-pred
 metric:
   goal: minimize
   name: best_val_rmse
@@ -27,11 +27,11 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    values: [GAT_fuse_graph]
+    values: [GAT_fuse_pred]
   # modality:
   #   values: [sc, fc]
-  ratio:
-    values: [0.2, 0.8]
+  # ratio:
+  #   values: [0.2, 0.8]
   ratio_sc:
     values: [0.2, 0.8]
   ratio_fc:
@@ -39,4 +39,4 @@ parameters:
   reduce:
     value: mean
   reduce_fuse:
-    values: [mean, sum, or, and]
+    values: [mean, sum]

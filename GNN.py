@@ -217,7 +217,7 @@ def pipe(configs: dict):
 if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
-    model_name = 'GCN'
+    model_name = 'GCN_fuse_pred'
     for seed in range(1):
         set_random_seed(seed)
         searchSpace = {
@@ -243,7 +243,7 @@ if __name__ == '__main__':
                     "reduce_fuse": "mean",
                     "use_wandb": False,
                     "model_name": model_name,
-                    "label_type": "classification"
+                    "label_type": "regression"
                 }
         if searchSpace['use_wandb']:
             run = wandb.init(
