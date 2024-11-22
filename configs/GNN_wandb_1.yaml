@@ -1,6 +1,6 @@
 program: run_wandb.py
 method: grid
-name: sweep-fuse-pred
+name: sweep-fuse-embed-nosia
 metric:
   goal: minimize
   name: best_val_rmse
@@ -27,7 +27,7 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    values: [SGC_fuse_pred]
+    values: [SGC_fuse_embed_nosia]
   # modality:
   #   values: [sc, fc]
   ratio:
@@ -39,4 +39,4 @@ parameters:
   reduce:
     value: mean
   reduce_fuse:
-    values: [mean, sum]
+    values: [mean, concat, sum]

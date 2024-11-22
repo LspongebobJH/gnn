@@ -22,6 +22,10 @@ FUSE_SINGLE_MODALITY_MODELS = \
     [name + '_fuse_embed' for name in SINGLE_MODALITY_MODELS] + \
     [name + '_fuse_graph' for name in SINGLE_MODALITY_MODELS] + \
     [name + '_fuse_pred' for name in SINGLE_MODALITY_MODELS]
+FUSE_SINGLE_MODALITY_MODELS_NOSIA = \
+    [name + '_fuse_embed_nosia' for name in SINGLE_MODALITY_MODELS] + \
+    [name + '_fuse_graph_nosia' for name in SINGLE_MODALITY_MODELS] + \
+    [name + '_fuse_pred_nosia' for name in SINGLE_MODALITY_MODELS]
 
 def model_infer(model, model_name, **kwargs):
     """
@@ -34,8 +38,9 @@ def model_infer(model, model_name, **kwargs):
     if model_name == 'MHGCN':
         adjs, idx, raw_Xs = kwargs['adjs'], kwargs['idx'], kwargs['raw_Xs']
         logits = model(adjs[idx], raw_Xs[idx])
-    elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS or \
-         model_name in FUSE_SINGLE_MODALITY_MODELS:
+    elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS + \
+            FUSE_SINGLE_MODALITY_MODELS + \
+            FUSE_SINGLE_MODALITY_MODELS_NOSIA:
         data = kwargs['data']
         logits = model(data)
     return logits.squeeze()

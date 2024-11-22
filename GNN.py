@@ -7,10 +7,10 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 from MHGCN_src import MHGCN
 from NeuroPath_src import DetourTransformer, Transformer, GAT, Vanilla
-from custom_src import VanillaFuse, GATFuse
+from custom_src import VanillaFuse, GATFuse, VanillaFuseNoSia, GATFuseNoSia
 from utils import set_random_seed, load_dataset, model_infer, \
     Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS, \
-    FUSE_SINGLE_MODALITY_MODELS, \
+    FUSE_SINGLE_MODALITY_MODELS, FUSE_SINGLE_MODALITY_MODELS_NOSIA, \
     to_pyg_single, split_pyg, to_pyg_fuse, device, get_fuse_type
 
 def pipe(configs: dict):
@@ -76,7 +76,7 @@ def pipe(configs: dict):
         elif model_name == 'Transformer':
             model = Transformer(in_dim = in_dim, hid_dim = hid_dim, nclass = out_dim)
     
-    elif model_name in FUSE_SINGLE_MODALITY_MODELS:
+    elif model_name in FUSE_SINGLE_MODALITY_MODELS + FUSE_SINGLE_MODALITY_MODELS_NOSIA:
         ratio_sc = configs['ratio_sc']
         ratio_fc = configs['ratio_fc']
         ratio = configs['ratio']
@@ -89,14 +89,25 @@ def pipe(configs: dict):
         train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
 
         if 'GAT' in model_name:
-            model = GATFuse(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
-                        nlayers=nlayers, dropout=dropout, nclass=out_dim, 
-                        reduce_nodes=reduce, reduce_fuse=reduce_fuse)
+            if model_name in FUSE_SINGLE_MODALITY_MODELS:
+                model = GATFuse(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
+                            nlayers=nlayers, dropout=dropout, nclass=out_dim, 
+                            reduce_nodes=reduce, reduce_fuse=reduce_fuse)
+            else:
+                model = GATFuseNoSia(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
+                            nlayers=nlayers, dropout=dropout, nclass=out_dim, 
+                            reduce_nodes=reduce, reduce_fuse=reduce_fuse)
             
         else:
-            model = VanillaFuse(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
-                        nlayers=nlayers, dropout=dropout, nclass=out_dim, 
-                        reduce_nodes=reduce, reduce_fuse=reduce_fuse)
+            if model_name in FUSE_SINGLE_MODALITY_MODELS:
+                model = VanillaFuse(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
+                            nlayers=nlayers, dropout=dropout, nclass=out_dim, 
+                            reduce_nodes=reduce, reduce_fuse=reduce_fuse)
+            else:
+                model = VanillaFuseNoSia(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
+                            nlayers=nlayers, dropout=dropout, nclass=out_dim, 
+                            reduce_nodes=reduce, reduce_fuse=reduce_fuse)
+
             
             
     model = model.to(device)                            
@@ -217,15 +228,15 @@ def pipe(configs: dict):
 if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
-    model_name = 'GCN_fuse_pred'
+    model_name = 'GCN_fuse_embed_nosia'
     for seed in range(1):
         set_random_seed(seed)
         searchSpace = {
                     # "hid_dim": 64,
-                    "hid_dim": 4,
+                    "hid_dim": 8,
                     "lr": 1e-3,
                     "epochs": 2000,
-                    "patience": 10,
+                    "patience": -1,
                     "wd": 1e-2,
                     # "nlayers": 2,
                     "nlayers": 1,
@@ -240,7 +251,7 @@ if __name__ == '__main__':
                     "ratio_fc": 0.2,
                     "ratio": 0.2,
                     "reduce": "mean",
-                    "reduce_fuse": "mean",
+                    "reduce_fuse": "concat",
                     "use_wandb": False,
                     "model_name": model_name,
                     "label_type": "regression"
