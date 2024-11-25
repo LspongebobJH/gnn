@@ -10,6 +10,7 @@ import os
 from torchmetrics import Accuracy, AUROC, AveragePrecision, MeanSquaredError
 from sklearn.model_selection import train_test_split, KFold
 from torch_geometric.data import Batch
+from torch_geometric.transforms import SIGN
 from torch_scatter import scatter
 import torch.nn as nn
 
@@ -38,11 +39,13 @@ def model_infer(model, model_name, **kwargs):
     if model_name == 'MHGCN':
         adjs, idx, raw_Xs = kwargs['adjs'], kwargs['idx'], kwargs['raw_Xs']
         logits = model(adjs[idx], raw_Xs[idx])
-    elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS + \
+        
+    elif model_name in ['NeuroPath', 'Mew'] + SINGLE_MODALITY_MODELS + \
             FUSE_SINGLE_MODALITY_MODELS + \
             FUSE_SINGLE_MODALITY_MODELS_NOSIA:
         data = kwargs['data']
         logits = model(data)
+        
     return logits.squeeze()
 
 def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, cross_args: dict = None):
@@ -264,6 +267,17 @@ def adj_weight2bin(adjs, ratio_sc, ratio_fc, single_modal=False):
         adjs_1 = adjs_1.reshape(original_shape)
 
         return adjs_0, adjs_1
+    
+def pyg_preprocess_sign(raw_Xs: torch.Tensor, adjs: torch.Tensor, k: int):
+    data_list = torch.zeros((
+        raw_Xs.shape[0], adjs.shape[1], k, raw_Xs.shape[1], raw_Xs.shape[2]
+    )) # num_nodes, num_graph_layers, k, num_nodes, num_feats
+
+    for i in range(k):
+        data_list[:, 0, i, :] = adjs[:, 0, :, :].matmul(raw_Xs)
+        data_list[:, 1, i, :] = adjs[:, 1, :, :].matmul(raw_Xs)
+        adjs = adjs.matmul(adjs)
+    return data_list
 
 def to_pyg_single(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, ratio_sc: float, ratio_fc: float, option: str):
     adjs_0, adjs_1 = adj_weight2bin(adjs, ratio_sc, ratio_fc)

@@ -18,7 +18,10 @@ def main(seed=0, config=None):
         wandb.init(project=project_name)
     config = wandb.config
     if config.model_name in \
-        ['MHGCN', 'NeuroPath'] + SINGLE_MODALITY_MODELS + FUSE_SINGLE_MODALITY_MODELS + FUSE_SINGLE_MODALITY_MODELS_NOSIA:
+        ['MHGCN', 'NeuroPath', 'Mew'] \
+            + SINGLE_MODALITY_MODELS \
+            + FUSE_SINGLE_MODALITY_MODELS \
+            + FUSE_SINGLE_MODALITY_MODELS_NOSIA:
         from GNN import pipe
     elif config.model_name in ['CIVAE']:
         from CIVAE import pipe

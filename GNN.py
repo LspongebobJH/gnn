@@ -7,11 +7,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 from MHGCN_src import MHGCN
 from NeuroPath_src import DetourTransformer, Transformer, GAT, Vanilla
-from custom_src import VanillaFuse, GATFuse, VanillaFuseNoSia, GATFuseNoSia
+from custom_src import VanillaFuse, GATFuse, VanillaFuseNoSia, GATFuseNoSia, \
+    SIGN_pred
 from utils import set_random_seed, load_dataset, model_infer, \
     Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS, \
     FUSE_SINGLE_MODALITY_MODELS, FUSE_SINGLE_MODALITY_MODELS_NOSIA, \
-    to_pyg_single, split_pyg, to_pyg_fuse, device, get_fuse_type
+    to_pyg_single, split_pyg, to_pyg_fuse, device, get_fuse_type, \
+    pyg_preprocess_sign
 
 def pipe(configs: dict):
     hid_dim = configs['hid_dim']
@@ -49,6 +51,21 @@ def pipe(configs: dict):
 
         adjs = adjs.to(device)
         raw_Xs = raw_Xs.to(device)
+
+    elif model_name == 'Mew':
+        k = nlayers
+        adjs = adjs.to(device)
+        raw_Xs = raw_Xs.to(device)
+
+        data_list = pyg_preprocess_sign(raw_Xs, adjs, k)
+        model = SIGN_pred(num_feat=in_dim, num_graph_tasks=out_dim, 
+                          num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
+                          graph_pooling=reduce,
+                          attn_weight=configs['attn_weight'],
+                          shared=configs['shared'])
+
+        train_data, valid_data, test_data = \
+            data_list[train_idx], data_list[valid_idx], data_list[test_idx]
         
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs['ratio_sc']
@@ -228,12 +245,12 @@ def pipe(configs: dict):
 if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
-    model_name = 'GCN_fuse_embed_nosia'
+    model_name = 'Mew'
     for seed in range(1):
         set_random_seed(seed)
         searchSpace = {
                     # "hid_dim": 64,
-                    "hid_dim": 8,
+                    "hid_dim": 4,
                     "lr": 1e-3,
                     "epochs": 2000,
                     "patience": -1,
@@ -254,7 +271,10 @@ if __name__ == '__main__':
                     "reduce_fuse": "concat",
                     "use_wandb": False,
                     "model_name": model_name,
-                    "label_type": "regression"
+                    "label_type": "regression",
+                    "attn_weight": True, 
+                    "shared": True
+
                 }
         if searchSpace['use_wandb']:
             run = wandb.init(
