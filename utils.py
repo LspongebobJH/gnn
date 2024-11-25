@@ -45,7 +45,7 @@ def model_infer(model, model_name, **kwargs):
             FUSE_SINGLE_MODALITY_MODELS_NOSIA:
         data = kwargs['data']
         logits = model(data)
-        
+
     return logits.squeeze()
 
 def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, cross_args: dict = None):
@@ -271,7 +271,7 @@ def adj_weight2bin(adjs, ratio_sc, ratio_fc, single_modal=False):
 def pyg_preprocess_sign(raw_Xs: torch.Tensor, adjs: torch.Tensor, k: int):
     data_list = torch.zeros((
         raw_Xs.shape[0], adjs.shape[1], k, raw_Xs.shape[1], raw_Xs.shape[2]
-    )) # num_nodes, num_graph_layers, k, num_nodes, num_feats
+    )).to(raw_Xs.device) # num_nodes, num_graph_layers, k, num_nodes, num_feats
 
     for i in range(k):
         data_list[:, 0, i, :] = adjs[:, 0, :, :].matmul(raw_Xs)
