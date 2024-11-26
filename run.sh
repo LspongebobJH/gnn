@@ -1,14 +1,18 @@
 #!/bin/bash
 
-seeds=( {1..5..1} )
+seeds=( {1..10..1} )
 exp="exp_2"
-models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
+device=3
+# models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
+models=( NeuroPath GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
 for model in "${models[@]}"; do
-    CUDA_VISIBLE_DEVICES=3 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 0 &
-    CUDA_VISIBLE_DEVICES=4 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 1 &
-    CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 2 &
-    CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 3 &
-    CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 4 &
+    for seed in "${seeds[@]}"; do
+        CUDA_VISIBLE_DEVICES=$device python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed $seed &
+        device=$(( device + 1 ))
+        if [ ${device} -eq 7 ]; then
+            deivce=3
+        fi
+    done
     wait
 done
 # # wait 
