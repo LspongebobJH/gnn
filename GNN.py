@@ -245,51 +245,51 @@ def pipe(configs: dict):
 if __name__ == '__main__':
     log_idx = 1
     train, valid, test = [], [], []
-    model_name = 'Mew'
-    for seed in range(1):
-        set_random_seed(seed)
-        searchSpace = {
-                    # "hid_dim": 64,
-                    "hid_dim": 4,
-                    "lr": 1e-3,
-                    "epochs": 2000,
-                    "patience": -1,
-                    "wd": 1e-2,
-                    # "nlayers": 2,
-                    "nlayers": 1,
-                    "split_args": {
-                        'train_size': 0.6,
-                        'valid_size': 0.2,
-                        'test_size': 0.2,
-                    },
-                    "dropout": 0.5,
-                    "modality": 'sc',
-                    "ratio_sc": 0.2,
-                    "ratio_fc": 0.2,
-                    "ratio": 0.2,
-                    "reduce": "mean",
-                    "reduce_fuse": "concat",
-                    "use_wandb": False,
-                    "model_name": model_name,
-                    "label_type": "regression",
-                    "attn_weight": True, 
-                    "shared": True
+    model_name = 'GCN'
+    seed=1
+    set_random_seed(seed)
+    searchSpace = {
+                # "hid_dim": 64,
+                "hid_dim": 4,
+                "lr": 1e-3,
+                "epochs": 2000,
+                "patience": 5,
+                "wd": 1e-2,
+                # "nlayers": 2,
+                "nlayers": 1,
+                "split_args": {
+                    'train_size': 0.6,
+                    'valid_size': 0.2,
+                    'test_size': 0.2,
+                },
+                "dropout": 0.5,
+                "modality": 'sc',
+                "ratio_sc": 0.2,
+                "ratio_fc": 0.2,
+                "ratio": 0.2,
+                "reduce": "mean",
+                "reduce_fuse": "concat",
+                "use_wandb": False,
+                "model_name": model_name,
+                "label_type": "regression",
+                "attn_weight": True, 
+                "shared": True
 
-                }
-        if searchSpace['use_wandb']:
-            run = wandb.init(
-                # Set the project where this run will be logged
-                project="multiplex gnn",
-                # Track hyperparameters and run metadata
-                config=searchSpace
-            )
-        best_train_rmse, best_val_rmse, best_test_rmse = pipe(searchSpace)
-        train.append(best_train_rmse)
-        valid.append(best_val_rmse)
-        test.append(best_test_rmse)
+            }
+    if searchSpace['use_wandb']:
+        run = wandb.init(
+            # Set the project where this run will be logged
+            project="multiplex gnn",
+            # Track hyperparameters and run metadata
+            config=searchSpace
+        )
+    best_train_rmse, best_val_rmse, best_test_rmse = pipe(searchSpace)
+    train.append(best_train_rmse)
+    valid.append(best_val_rmse)
+    test.append(best_test_rmse)
 
-        # with open(f'./logs/log_{log_idx}.txt', 'a') as f:
-        #     f.write(f"{searchSpace['model_name']}: ")
-        #     f.write(f'best_train_rmse: {np.mean(train):.4f}±{np.std(train):.4f} | '
-        #             f'best_val_rmse: {np.mean(valid):.4f}±{np.std(valid):.4f} | '
-        #             f'best_test_rmse: {np.mean(test):.4f}±{np.std(test):.4f}\n')
+    # with open(f'./logs/log_{log_idx}.txt', 'a') as f:
+    #     f.write(f"{searchSpace['model_name']}: ")
+    #     f.write(f'best_train_rmse: {np.mean(train):.4f}±{np.std(train):.4f} | '
+    #             f'best_val_rmse: {np.mean(valid):.4f}±{np.std(valid):.4f} | '
+    #             f'best_test_rmse: {np.mean(test):.4f}±{np.std(test):.4f}\n')

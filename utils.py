@@ -70,7 +70,6 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         adjs = data['adjs']
         raw_Xs = data['raw_Xs']
         labels = data['labels']
-        splits = data['splits']
         mu_lbls = data['mu_lbls']
         std_lbls = data['std_lbls']
     else:
@@ -127,24 +126,6 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         else:
             mu_lbls, std_lbls = labels.mean(), labels.std()
             labels = (labels - mu_lbls) / std_lbls
-
-        if eval_type == 'split':
-            train_size, valid_size, test_size = \
-                split_args['train_size'], split_args['valid_size'], split_args['test_size']
-            idx = np.arange(len(labels))
-            train_valid_idx, test_idx = \
-                train_test_split(idx, test_size=test_size)
-            train_idx, valid_idx = \
-                train_test_split(train_valid_idx, 
-                                test_size=valid_size / (train_size + valid_size))
-            splits = {
-                'train_idx': train_idx,
-                'valid_idx': valid_idx,
-                'test_idx': test_idx,
-            }
-        elif eval_type == 'cross':
-            kfold = KFold(n_splits=5, shuffle=True)
-            splits = list(kfold.split(X=idx))
         
         batchnorm = nn.BatchNorm1d(raw_Xs.shape[-1], affine=False)
         layernorm = nn.LayerNorm([adjs.shape[-2], adjs.shape[-1]], elementwise_affine=False)
@@ -163,7 +144,6 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             'adjs': adjs,
             'raw_Xs': raw_Xs,
             'labels': labels,
-            'splits': splits,
             'mu_lbls': mu_lbls,
             'std_lbls': std_lbls,
         }
@@ -172,6 +152,25 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             pickle.dump(data, f)
 
         assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
+
+    if eval_type == 'split':
+        train_size, valid_size, test_size = \
+            split_args['train_size'], split_args['valid_size'], split_args['test_size']
+        idx = np.arange(len(labels))
+        train_valid_idx, test_idx = \
+            train_test_split(idx, test_size=test_size)
+        train_idx, valid_idx = \
+            train_test_split(train_valid_idx, 
+                            test_size=valid_size / (train_size + valid_size))
+        splits = {
+            'train_idx': train_idx,
+            'valid_idx': valid_idx,
+            'test_idx': test_idx,
+        }
+    elif eval_type == 'cross':
+        kfold = KFold(n_splits=5, shuffle=True)
+        splits = list(kfold.split(X=idx))
+
     return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
 
 def set_random_seed(seed):
