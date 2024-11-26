@@ -1,6 +1,6 @@
 #!/bin/bash
 
-seeds=( {1..10..1} )
+seeds=( {0..9..1} )
 exp="exp_2"
 device=3
 # models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
