@@ -7,10 +7,11 @@ device=3
 models=( NeuroPath GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
 for model in "${models[@]}"; do
     for seed in "${seeds[@]}"; do
-        CUDA_VISIBLE_DEVICES=$device python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed $seed &
+        # CUDA_VISIBLE_DEVICES=$device python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed $seed &
+        echo $device
         device=$(( device + 1 ))
-        if [ ${device} -eq 7 ]; then
-            deivce=3
+        if [ ${device} -eq 8 ]; then
+            device=3
         fi
     done
     wait
