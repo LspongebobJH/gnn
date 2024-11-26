@@ -244,7 +244,7 @@ def pipe(configs: dict):
 
 if __name__ == '__main__':
     log_idx = 1
-    model_name = 'MHGCN'
+    model_name = 'Mew'
     seed=1
     set_random_seed(seed)
     searchSpace = {
