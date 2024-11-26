@@ -1,22 +1,22 @@
 #!/bin/bash
 
-# seeds=( {1..5..1} )
-# models=( GAT )
-# for model in "${models[@]}"; do
-#     CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 0 &
-#     CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 1 &
-#     CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 2 &
-#     wait
-#     CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 3 &
-#     CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/${model}_fuse_graph_best.yaml --project_name exp_1 --seed 4 &
-#     wait
-# done
+seeds=( {1..5..1} )
+exp="exp_2"
+models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
+for model in "${models[@]}"; do
+    CUDA_VISIBLE_DEVICES=3 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 0 &
+    CUDA_VISIBLE_DEVICES=4 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 1 &
+    CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 2 &
+    CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 3 &
+    CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed 4 &
+    wait
+done
 # # wait 
-CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 0 &
-CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 1 &
-CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 2 &
-CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 3 &
-CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 4 &
+# CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 0 &
+# CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 1 &
+# CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 2 &
+# CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 3 &
+# CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 4 &
 # CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/SAGE_fuse_embed_nosia_best.yaml --project_name exp_1 --seed 2 &
 
 # wait
