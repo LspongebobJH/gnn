@@ -68,9 +68,9 @@ def pipe(configs: dict):
             data_list[train_idx], data_list[valid_idx], data_list[test_idx]
         
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
-        ratio_sc = configs['ratio_sc']
-        ratio_fc = configs['ratio_fc']
-        ratio = configs['ratio']
+        ratio_sc = configs.get('ratio_sc', 0.2)
+        ratio_fc = configs.get('ratio_fc', 0.2)
+        ratio = configs.get('ratio', 0.2)
 
         if model_name in SINGLE_MODALITY_MODELS:
             data_list = to_pyg_single(raw_Xs, labels, adjs, 
@@ -94,10 +94,10 @@ def pipe(configs: dict):
             model = Transformer(in_dim = in_dim, hid_dim = hid_dim, nclass = out_dim)
     
     elif model_name in FUSE_SINGLE_MODALITY_MODELS + FUSE_SINGLE_MODALITY_MODELS_NOSIA:
-        ratio_sc = configs['ratio_sc']
-        ratio_fc = configs['ratio_fc']
-        ratio = configs['ratio']
-        reduce_fuse = configs['reduce_fuse']
+        ratio_sc = configs.get('ratio_sc', 0.2)
+        ratio_fc = configs.get('ratio_fc', 0.2)
+        ratio = configs.get('ratio', 0.2)
+        reduce_fuse = configs.get('reduce_fuse', 'mean')
 
         fuse_type = get_fuse_type(model_name)
         data_list = to_pyg_fuse(raw_Xs, labels, adjs, 
