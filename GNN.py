@@ -244,19 +244,18 @@ def pipe(configs: dict):
 
 if __name__ == '__main__':
     log_idx = 1
-    train, valid, test = [], [], []
-    model_name = 'GCN'
+    model_name = 'MHGCN'
     seed=1
     set_random_seed(seed)
     searchSpace = {
                 # "hid_dim": 64,
-                "hid_dim": 4,
-                "lr": 1e-3,
+                "hid_dim": 8,
+                "lr": 1e-2,
                 "epochs": 2000,
                 "patience": 5,
                 "wd": 1e-2,
-                # "nlayers": 2,
-                "nlayers": 1,
+                "nlayers": 2,
+                # "nlayers": 1,
                 "split_args": {
                     'train_size': 0.6,
                     'valid_size': 0.2,
@@ -273,8 +272,7 @@ if __name__ == '__main__':
                 "model_name": model_name,
                 "label_type": "regression",
                 "attn_weight": True, 
-                "shared": True
-
+                "shared": True,
             }
     if searchSpace['use_wandb']:
         run = wandb.init(
@@ -284,9 +282,7 @@ if __name__ == '__main__':
             config=searchSpace
         )
     best_train_rmse, best_val_rmse, best_test_rmse = pipe(searchSpace)
-    train.append(best_train_rmse)
-    valid.append(best_val_rmse)
-    test.append(best_test_rmse)
+    print(f"BEST RMSE: train - {best_train_rmse:.4f} | valid - {best_val_rmse:.4f} | test - {best_test_rmse:.4f}")
 
     # with open(f'./logs/log_{log_idx}.txt', 'a') as f:
     #     f.write(f"{searchSpace['model_name']}: ")
