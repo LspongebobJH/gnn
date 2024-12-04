@@ -67,7 +67,7 @@ def pipe(configs: dict):
         adjs = adjs.to(device)
         raw_Xs = raw_Xs.to(device)
 
-        data_list = pyg_preprocess_sign(raw_Xs, adjs, nlayers)
+        data = pyg_preprocess_sign(raw_Xs, adjs, nlayers)
         model = SIGN_pred(num_feat=in_dim, num_graph_tasks=out_dim, 
                           num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
                           graph_pooling=reduce,
@@ -80,11 +80,13 @@ def pipe(configs: dict):
         no_sc_idx = no_sc_idx.to(device)
         no_fc_idx = no_fc_idx.to(device)
         k = configs.get('supp_k', 5)
+        fuse_type = configs.get('fuse_type', 'graph_embed')
+
         model = MewCustom(num_feat=in_dim, num_graph_tasks=out_dim, 
                           num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
                           graph_pooling=reduce,
                           attn_weight=configs['attn_weight'],
-                          shared=configs['shared'], k=k)
+                          shared=configs['shared'], k=k, fuse_type=fuse_type)
         
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.2)
@@ -285,9 +287,10 @@ if __name__ == '__main__':
                 "label_type": "regression",
                 "attn_weight": True, 
                 "shared": False,
-                "reload": True,
+                "reload": False,
                 "file_option": "_miss_graph",
-                "supp_k": 2
+                "supp_k": 2,
+                "fuse_type": "node_embed_on_graph_embed"
             }
     if searchSpace['use_wandb']:
         run = wandb.init(

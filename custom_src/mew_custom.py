@@ -36,34 +36,27 @@ class SIGNv2Custom(SIGN_v2):
         
 class MewCustom(SIGN_pred):
     def __init__(self, num_layer, num_feat, emb_dim, drop_ratio, shared, 
-                 k=None, supp_pool="mean",
+                 k=None, supp_pool="mean", fuse_type='graph_embed',
                  *args, **kwargs):
         super().__init__(num_layer, num_feat, emb_dim, drop_ratio=drop_ratio, shared=shared, *args, **kwargs)
         self.k = k
+        self.fuse_type = fuse_type
         self.sign = SIGNv2Custom(num_layer, num_feat, emb_dim, dropout=drop_ratio)
         self.sign2 = self.sign if shared else SIGNv2Custom(num_layer, num_feat, emb_dim, dropout=drop_ratio)
 
         self.supp_pool = supp_pool
 
-    def forward(self, adjs, feats, no_sc_idx, no_fc_idx):
-        batch = torch.repeat_interleave(
-            torch.arange(feats.shape[0]), 
-            feats.shape[-2]
-        ).to(feats.device)
-        node_representation_1 = self.sign(adjs[:, 0], feats) # geom
-        node_representation_2 = self.sign2(adjs[:, 1], feats) # cell_type
+    def fuse_graph_embed(self, node_embed_1, node_embed_2, batch, no_sc_idx, no_fc_idx):
+        graph_embed_1 = self.pool(node_embed_1, batch.to(node_embed_1.device))
+        graph_embed_2 = self.pool(node_embed_2, batch.to(node_embed_2.device)) 
 
-        graph_embed_1 = self.pool(node_representation_1, batch.to(node_representation_1.device))
-        graph_embed_2 = self.pool(node_representation_2, batch.to(node_representation_2.device)) 
-
-        if len(no_sc_idx) > 0:
+        if no_sc_idx.sum() > 0:
             knn_g = knn_graph(graph_embed_2, no_sc_idx, self.k, exclude_self=True) # must be graph_embed_2 not embed_1
             knn_n, target_n = knn_g.in_edges(v=torch.where(no_sc_idx)[0])
             graph_embed_1[no_sc_idx] = scatter(graph_embed_1[knn_n], target_n, 
                                             reduce=self.supp_pool, dim=0, 
                                             dim_size=graph_embed_1.shape[0])[no_sc_idx]
-            
-        if len(no_fc_idx) > 0:
+        if no_fc_idx.sum() > 0:
             knn_g = knn_graph(graph_embed_1, no_fc_idx, self.k, exclude_self=True)  # must be graph_embed_1 not embed_2
             knn_n, target_n = knn_g.in_edges(v=torch.where(no_fc_idx)[0])
             graph_embed_2[no_fc_idx] = scatter(graph_embed_2[knn_n], target_n, 
@@ -79,7 +72,66 @@ class MewCustom(SIGN_pred):
 
         values = torch.softmax(torch.cat((geom_, cell_type_), dim=1), dim=1)
         graph_embed = (values[:,0].unsqueeze(1) * graph_embed_1) + (values[:,1].unsqueeze(1) * graph_embed_2)
+
+        return graph_embed
+    
+    def fuse_node_embed_on_graph_embed(self, node_embed_1, node_embed_2, 
+                                          batch, no_sc_idx, no_fc_idx, 
+                                          num_graphs, num_nodes):
+
+        graph_embed_1 = self.pool(node_embed_1, batch.to(node_embed_1.device))
+        graph_embed_2 = self.pool(node_embed_2, batch.to(node_embed_2.device))
+
+        node_embed_1 = node_embed_1.reshape(num_graphs, num_nodes, -1)
+        node_embed_2 = node_embed_2.reshape(num_graphs, num_nodes, -1)
+
+        if no_sc_idx.sum() > 0:
+            knn_g = knn_graph(graph_embed_2, no_sc_idx, self.k, exclude_self=True) # must be graph_embed_2 not embed_1
+            knn_n, target_n = knn_g.in_edges(v=torch.where(no_sc_idx)[0])
+            node_embed_1[no_sc_idx] = scatter(node_embed_1[knn_n], target_n, 
+                                            reduce=self.supp_pool, dim=0, 
+                                            dim_size=node_embed_1.shape[0])[no_sc_idx]
+        if no_fc_idx.sum() > 0:
+            knn_g = knn_graph(graph_embed_1, no_fc_idx, self.k, exclude_self=True)  # must be graph_embed_1 not embed_2
+            knn_n, target_n = knn_g.in_edges(v=torch.where(no_fc_idx)[0])
+            node_embed_2[no_fc_idx] = scatter(node_embed_2[knn_n], target_n, 
+                                            reduce=self.supp_pool, dim=0, 
+                                            dim_size=node_embed_2.shape[0])[no_fc_idx]
+            
+        node_embed_1 = node_embed_1.reshape(num_graphs * num_nodes, -1)
+        node_embed_2 = node_embed_2.reshape(num_graphs * num_nodes, -1)
+            
+        if self.attn_weight:
+            geom_ = self.leakyrelu(torch.mm(self.w1(node_embed_1), self.attention))
+            cell_type_ = self.leakyrelu(torch.mm(self.w2(node_embed_2), self.attention))
+        else:
+            geom_ = self.leakyrelu(torch.mm(node_embed_1, self.attention))
+            cell_type_ = self.leakyrelu(torch.mm(node_embed_2, self.attention))
         
+        values = torch.softmax(torch.cat((geom_, cell_type_), dim=1), dim=1)
+        node_embed = (values[:,0].unsqueeze(1) * node_embed_1) + (values[:,1].unsqueeze(1) * node_embed_2)
+        graph_embed = self.pool(node_embed, batch.to(node_embed_1.device))
+
+        return graph_embed
+
+    def forward(self, adjs, feats, no_sc_idx, no_fc_idx):
+        batch = torch.repeat_interleave(
+            torch.arange(feats.shape[0]), 
+            feats.shape[-2]
+        ).to(feats.device)
+        num_graphs, num_nodes = feats.shape[0], feats.shape[1]
+        node_embed_1 = self.sign(adjs[:, 0], feats) # geom
+        node_embed_2 = self.sign2(adjs[:, 1], feats) # cell_type
+
+        if self.fuse_type == 'graph_embed':
+            graph_embed = \
+                self.fuse_graph_embed(node_embed_1, node_embed_2, batch, no_sc_idx, no_fc_idx)
+       
+        elif self.fuse_type == 'node_embed_on_graph_embed':
+            graph_embed = \
+                self.fuse_node_embed_on_graph_embed(node_embed_1, node_embed_2, 
+                                                    batch, no_sc_idx, no_fc_idx, 
+                                                    num_graphs, num_nodes)
         if self.num_graph_tasks > 0:
             graph_pred = self.graph_pred_module(graph_embed)
 
