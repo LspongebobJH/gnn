@@ -77,7 +77,8 @@ def pipe(configs: dict):
     elif model_name == "MewCustom":
         adjs = adjs.to(device)
         raw_Xs = raw_Xs.to(device)
-
+        no_sc_idx = no_sc_idx.to(device)
+        no_fc_idx = no_fc_idx.to(device)
         k = configs.get('supp_k', 5)
         model = MewCustom(num_feat=in_dim, num_graph_tasks=out_dim, 
                           num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
