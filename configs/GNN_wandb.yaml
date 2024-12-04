@@ -1,6 +1,6 @@
 program: run_wandb.py
 method: grid
-name: sweep-mew
+name: sweep-mew-fuse-graph-embed
 metric:
   goal: minimize
   name: best_val_rmse
@@ -27,7 +27,7 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    value: Mew
+    value: MewCustom
   # modality:
   #   values: [sc, fc]
   # ratio:
@@ -44,4 +44,8 @@ parameters:
     values: [true, false]
   shared:
     values: [true, false]
+  file_option:
+    value: _miss_graph
+  supp_k:
+    values: [2, 5, 8]
 

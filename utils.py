@@ -37,8 +37,8 @@ def model_infer(model, model_name, **kwargs):
     device
     """
     if model_name == 'MHGCN':
-        adjs, idx, raw_Xs = kwargs['adjs'], kwargs['idx'], kwargs['raw_Xs']
-        logits = model(adjs[idx], raw_Xs[idx])
+        adjs, raw_Xs = kwargs['adjs'], kwargs['raw_Xs']
+        logits = model(adjs, raw_Xs)
         
     elif model_name in ['NeuroPath', 'Mew'] + SINGLE_MODALITY_MODELS + \
             FUSE_SINGLE_MODALITY_MODELS + \
@@ -46,9 +46,16 @@ def model_infer(model, model_name, **kwargs):
         data = kwargs['data']
         logits = model(data)
 
+    elif model_name == 'MewCustom':
+        adjs, raw_Xs, no_sc_idx, no_fc_idx = \
+            kwargs['adjs'], kwargs['raw_Xs'], kwargs['no_sc_idx'], kwargs['no_fc_idx']
+        logits = model(adjs, raw_Xs, no_sc_idx, no_fc_idx)
+
     return logits.squeeze()
 
-def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, cross_args: dict = None):
+def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, 
+                 cross_args: dict = None, reload = False, 
+                 file_option = ""):
     """
 
     label_type: if classification, all labels(int) are converted into its index. If regression, use original values.
@@ -60,11 +67,13 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
     # TODO train-valid-test split, and cross-validation
     assert label_type in ['classification', 'regression']
     assert eval_type in ['split', 'cross']
+    assert file_option in ['', '_miss_graph']
     if eval_type == 'split':
         assert split_args is not None
 
-    file_path = f'./dataset/processed_data_{label_type}_{eval_type}.pkl'
-    if os.path.exists(file_path):
+    file_path = f'./dataset/processed_data_{label_type}_{eval_type}{file_option}.pkl'
+    if os.path.exists(file_path) and not reload:
+        print(f"read processed data from {file_path}")
         with open(file_path, 'rb') as f:
             data = pickle.load(f)
         adjs = data['adjs']
@@ -72,6 +81,9 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         labels = data['labels']
         mu_lbls = data['mu_lbls']
         std_lbls = data['std_lbls']
+        if file_option == '_miss_graph':
+            no_sc_idx = data['no_sc_idx']
+            no_fc_idx = data['no_fc_idx']
     else:
         # data_path = '/home/jiahang/gnn/dataset'
         data_path = './dataset'
@@ -93,17 +105,37 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         
         # NOTE note that only data_SC has full keys, is it a semi-supervised task?
         ## we only take graph which have labels and both SC, FC modalities.
-        adjs = torch.zeros((len(data_labels), 2, 200, 200))
-        labels = torch.zeros(len(data_labels))
-        raw_Xs = torch.zeros((len(data_labels), 200, 9))
+        all_keys = np.unique(list(data_SC.keys()) + list(data_FC.keys()) + list(data_labels.keys()))
+        data_size = len(all_keys)
+        adjs = torch.zeros((data_size, 2, 200, 200))
+        labels = torch.zeros(data_size)
+        raw_Xs = torch.zeros((data_size, 200, 9))
+        no_sc_idx, no_fc_idx = \
+            torch.zeros(data_size, dtype=torch.bool), torch.zeros(data_size, dtype=torch.bool)
         mask = []
-        for i, name in tqdm(enumerate(data_labels.keys())):
-            if name not in data_SC.keys() or name not in data_FC.keys() or name not in data_raw_X.keys():
+        for i, name in tqdm(enumerate(all_keys)):
+            if name not in data_raw_X.keys():
                 continue
-            if 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
+            if name not in data_labels.keys() or 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
                 continue
-            adjs[i, 0] = torch.tensor(data_SC[name])
-            adjs[i, 1] = torch.tensor(data_FC[name])
+            
+            if name not in data_SC.keys():
+                if file_option == '_miss_graph':
+                    adjs[i, 0] = torch.zeros(200, 200)
+                    no_sc_idx[i] = True
+                else:
+                    continue
+            else:
+                adjs[i, 0] = torch.tensor(data_SC[name])
+
+            if name not in data_FC.keys():
+                if file_option == '_miss_graph':
+                    adjs[i, 1] = torch.zeros(200, 200)
+                    no_fc_idx[i] = True
+                else:
+                    continue
+            else:
+                adjs[i, 1] = torch.tensor(data_FC[name])
 
             labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
 
@@ -115,6 +147,8 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         adjs = adjs[mask]
         labels = labels[mask]
         raw_Xs = raw_Xs[mask]
+        no_sc_idx = no_sc_idx[mask]
+        no_fc_idx = no_fc_idx[mask]
 
         mu_lbls, std_lbls = None, None
         if label_type == 'classification':
@@ -148,6 +182,10 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             'std_lbls': std_lbls,
         }
 
+        if file_option == '_miss_graph':
+            data['no_sc_idx'] = no_sc_idx
+            data['no_fc_idx'] = no_fc_idx
+
         with open(file_path, 'wb') as f:
             pickle.dump(data, f)
 
@@ -171,8 +209,10 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         kfold = KFold(n_splits=5, shuffle=True)
         splits = list(kfold.split(X=idx))
 
-    return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
-
+    if file_option == '_miss_graph':
+        return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx
+    else:
+        return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
 def set_random_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -312,8 +352,10 @@ def split_pyg(data_list: list, train_idx: list, valid_idx: list, test_idx: list)
     test_data = [data_list[i] for i in test_idx]
     test_data = Batch.from_data_list(test_data).to(device)
 
+    data = Batch.from_data_list(data_list).to(device)
+
     print(f"finish preprocessing: {time() - time_st:.2f}s")
-    return train_data, valid_data, test_data
+    return train_data, valid_data, test_data, data
 
 def to_pyg_fuse(raw_Xs: torch.Tensor, labels: torch.Tensor, adjs: torch.Tensor, 
                 fuse_type: str, reduce_fuse: str, 

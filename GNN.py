@@ -8,12 +8,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 from MHGCN_src import MHGCN
 from NeuroPath_src import DetourTransformer, Transformer, GAT, Vanilla
 from custom_src import VanillaFuse, GATFuse, VanillaFuseNoSia, GATFuseNoSia, \
-    SIGN_pred
+    SIGN_pred, MewCustom
 from utils import set_random_seed, load_dataset, model_infer, \
     Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS, \
     FUSE_SINGLE_MODALITY_MODELS, FUSE_SINGLE_MODALITY_MODELS_NOSIA, \
     to_pyg_single, split_pyg, to_pyg_fuse, device, get_fuse_type, \
     pyg_preprocess_sign
+from torch_geometric.data import Batch
 
 def pipe(configs: dict):
     hid_dim = configs['hid_dim']
@@ -30,11 +31,21 @@ def pipe(configs: dict):
     reduce = configs['reduce']
     dropout = configs['dropout']
 
+    file_option = configs.get('file_option', "")
+    reload = configs.get('reload', False)
     label_type = configs.get('label_type', 'regression')
     eval_type = configs.get('eval_type', 'split')
-
-    adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = \
-        load_dataset(split_args=split_args, label_type=label_type, eval_type=eval_type)
+    
+    # adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = \
+    results = \
+        load_dataset(split_args=split_args, label_type=label_type, 
+                     eval_type=eval_type, reload=reload, 
+                     file_option=file_option)
+    no_sc_idx, no_fc_idx = None, None
+    if file_option == "":
+        adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = results
+    elif file_option == "_miss_graph":
+        adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = results
     train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']    
     in_dim = raw_Xs.shape[-1]
 
@@ -45,7 +56,7 @@ def pipe(configs: dict):
         out_dim = 1
 
 
-    train_data, valid_data, test_data = None, None, None
+    data = None
     if model_name == 'MHGCN':
         model = MHGCN(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, dropout=dropout)
 
@@ -53,19 +64,26 @@ def pipe(configs: dict):
         raw_Xs = raw_Xs.to(device)
 
     elif model_name == 'Mew':
-        k = nlayers
         adjs = adjs.to(device)
         raw_Xs = raw_Xs.to(device)
 
-        data_list = pyg_preprocess_sign(raw_Xs, adjs, k)
+        data_list = pyg_preprocess_sign(raw_Xs, adjs, nlayers)
         model = SIGN_pred(num_feat=in_dim, num_graph_tasks=out_dim, 
                           num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
                           graph_pooling=reduce,
                           attn_weight=configs['attn_weight'],
                           shared=configs['shared'])
+        
+    elif model_name == "MewCustom":
+        adjs = adjs.to(device)
+        raw_Xs = raw_Xs.to(device)
 
-        train_data, valid_data, test_data = \
-            data_list[train_idx], data_list[valid_idx], data_list[test_idx]
+        k = configs.get('supp_k', 5)
+        model = MewCustom(num_feat=in_dim, num_graph_tasks=out_dim, 
+                          num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
+                          graph_pooling=reduce,
+                          attn_weight=configs['attn_weight'],
+                          shared=configs['shared'], k=k)
         
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.2)
@@ -78,7 +96,7 @@ def pipe(configs: dict):
         else: # NeuroPath
             data_list = to_pyg_single(raw_Xs, labels, adjs, 
                                       ratio_sc=ratio_sc, ratio_fc=ratio_fc, option='fc')
-        train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
+        data = Batch.from_data_list(data_list).to(device)
 
         if model_name == 'NeuroPath':
             model = DetourTransformer(num_nodes = raw_Xs.shape[1], in_dim = in_dim, 
@@ -103,7 +121,7 @@ def pipe(configs: dict):
         data_list = to_pyg_fuse(raw_Xs, labels, adjs, 
                                 fuse_type=fuse_type, reduce_fuse=reduce_fuse,
                                 ratio_sc=ratio_sc, ratio_fc=ratio_fc, ratio=ratio)
-        train_data, valid_data, test_data = split_pyg(data_list, train_idx, valid_idx, test_idx)
+        data = Batch.from_data_list(data_list).to(device)
 
         if 'GAT' in model_name:
             if model_name in FUSE_SINGLE_MODALITY_MODELS:
@@ -148,16 +166,17 @@ def pipe(configs: dict):
         if epoch == 1000 and  model_name == 'MHGCN':
             for g in optimizer.param_groups:
                 g['lr'] *= 1e-1
-        logits = model_infer(model, model_name, adjs=adjs, idx=train_idx,
-                             raw_Xs=raw_Xs, data=train_data)
-        loss = loss_fn(logits, labels[train_idx])
+        logits = model_infer(model, model_name, adjs=adjs,
+                             raw_Xs=raw_Xs, data=data, 
+                             no_sc_idx=no_sc_idx, no_fc_idx=no_fc_idx)
+        loss = loss_fn(logits[train_idx], labels[train_idx])
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         model.eval()
         if label_type == 'classification':
-            train_acc, train_auroc, train_auprc = evaluator.evaluate(logits, labels[train_idx])
+            train_acc, train_auroc, train_auprc = evaluator.evaluate(logits[train_idx], labels[train_idx])
             print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train Acc {train_acc:.4f} | Train Auroc {train_auroc:.4f} | "
                     f"Train Auprc: {train_auprc:.4f}")
             if use_wandb:
@@ -167,7 +186,7 @@ def pipe(configs: dict):
                     'train_auprc': train_auprc,
                 })
         else:
-            train_rmse = evaluator.evaluate(logits, labels[train_idx])
+            train_rmse = evaluator.evaluate(logits[train_idx], labels[train_idx])
             print(f"Epoch {epoch:05d} | Loss (calib RMSE) {loss.item():.4f} | Train RMSE {train_rmse:.4f}")
             if use_wandb:
                 wandb.log({
@@ -177,12 +196,8 @@ def pipe(configs: dict):
         if epoch % 5 == 0:
             model.eval()
             if label_type == 'classification':
-                logits_valid = model_infer(model, model_name, adjs=adjs, idx=valid_idx,
-                                           raw_Xs=raw_Xs, data=valid_data)
-                logits_test = model_infer(model, model_name, adjs=adjs, idx=test_idx,
-                                          raw_Xs=raw_Xs, data=test_data)
-                valid_acc, valid_auroc, valid_auprc = evaluator.evaluate(logits_valid, labels[valid_idx])
-                test_acc, test_auroc, test_auprc = evaluator.evaluate(logits_test, labels[test_idx])
+                valid_acc, valid_auroc, valid_auprc = evaluator.evaluate(logits[valid_idx], labels[valid_idx])
+                test_acc, test_auroc, test_auprc = evaluator.evaluate(logits[test_idx], labels[test_idx])
                 print(f"Valid Acc {valid_acc:.4f} | Valid Auroc {valid_auroc:.4f} | Valid Auprc: {valid_auprc:.4f}")
                 print(f"Test Acc {test_acc:.4f} | Test Auroc {test_auroc:.4f} | Test Auprc: {test_auprc:.4f}")
                 
@@ -197,12 +212,8 @@ def pipe(configs: dict):
                         'test_auprc': test_auprc,
                     })
             else:
-                logits_valid = model_infer(model, model_name, adjs=adjs, idx=valid_idx,
-                                           raw_Xs=raw_Xs, data=valid_data)
-                logits_test = model_infer(model, model_name, adjs=adjs, idx=test_idx,
-                                          raw_Xs=raw_Xs, data=test_data)
-                valid_rmse = evaluator.evaluate(logits_valid, labels[valid_idx])
-                test_rmse = evaluator.evaluate(logits_test, labels[test_idx])
+                valid_rmse = evaluator.evaluate(logits[valid_idx], labels[valid_idx])
+                test_rmse = evaluator.evaluate(logits[test_idx], labels[test_idx])
 
                 print(f"Valid RMSE {valid_rmse:.4f} | Test RMSE {test_rmse:.4f}")
 
@@ -244,7 +255,7 @@ def pipe(configs: dict):
 
 if __name__ == '__main__':
     log_idx = 1
-    model_name = 'Mew'
+    model_name = 'MewCustom'
     seed=1
     set_random_seed(seed)
     searchSpace = {
@@ -272,7 +283,10 @@ if __name__ == '__main__':
                 "model_name": model_name,
                 "label_type": "regression",
                 "attn_weight": True, 
-                "shared": True,
+                "shared": False,
+                "reload": True,
+                "file_option": "_miss_graph",
+                "supp_k": 2
             }
     if searchSpace['use_wandb']:
         run = wandb.init(
