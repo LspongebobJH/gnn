@@ -1,6 +1,6 @@
 program: run_wandb.py
 method: grid
-name: sweep-mew-fuse-node-embed-on-graph-embed-1
+name: sweep-mew-fuse-node-embed-on-graph-embed-2
 # name: sweep-mew-fuse-graph-embed-1
 metric:
   goal: minimize
