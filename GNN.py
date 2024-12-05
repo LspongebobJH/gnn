@@ -35,12 +35,15 @@ def pipe(configs: dict):
     reload = configs.get('reload', False)
     label_type = configs.get('label_type', 'regression')
     eval_type = configs.get('eval_type', 'split')
+    seed = configs.get('seed', 0)
+    valid_test_version = configs.get('valid_test_version', 1)
     
     # adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = \
     results = \
         load_dataset(split_args=split_args, label_type=label_type, 
                      eval_type=eval_type, reload=reload, 
-                     file_option=file_option)
+                     file_option=file_option, seed=seed, 
+                     version=valid_test_version)
     no_sc_idx, no_fc_idx = None, None
     if file_option == "":
         adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = results

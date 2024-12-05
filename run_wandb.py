@@ -43,6 +43,7 @@ if __name__ == '__main__':
         config = yaml.safe_load(f)
 
     modify_project_name(args.project_name)
+    config['seed'] = args.seed
 
     if args.wandb == 'sweep':
         sweep_id = wandb.sweep(sweep=config, project=project_name)
