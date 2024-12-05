@@ -266,7 +266,7 @@ if __name__ == '__main__':
                 "hid_dim": 8,
                 "lr": 1e-2,
                 "epochs": 2000,
-                "patience": 5,
+                "patience": -1,
                 "wd": 1e-2,
                 "nlayers": 2,
                 # "nlayers": 1,
@@ -287,7 +287,8 @@ if __name__ == '__main__':
                 "label_type": "regression",
                 "attn_weight": True, 
                 "shared": False,
-                "reload": False,
+                "reload": True,
+                # "file_option": "",
                 "file_option": "_miss_graph",
                 "supp_k": 2,
                 "fuse_type": "node_embed_on_graph_embed"

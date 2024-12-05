@@ -55,7 +55,7 @@ def model_infer(model, model_name, **kwargs):
 
 def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, 
                  cross_args: dict = None, reload = False, 
-                 file_option = ""):
+                 file_option = "", seed=0, version=1):
     """
 
     label_type: if classification, all labels(int) are converted into its index. If regression, use original values.
@@ -85,7 +85,14 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             no_sc_idx = data['no_sc_idx']
             no_fc_idx = data['no_fc_idx']
     else:
-        # data_path = '/home/jiahang/gnn/dataset'
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        dir_path = os.path.join(dir_path, 'dataset', 'valid_test_split')
+        path = os.path.join(dir_path, f'v{version}.pkl')
+
+        with open(path, 'rb') as f:
+            splits = pickle.load(f)[seed]
+        
+        valid_names, test_names = splits['valid_names'], splits['test_names']
         data_path = './dataset'
         path = os.path.join(data_path, 'FC_Fisher_Z_transformed.pkl')
         with open(path, 'rb') as f:
@@ -113,29 +120,39 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         no_sc_idx, no_fc_idx = \
             torch.zeros(data_size, dtype=torch.bool), torch.zeros(data_size, dtype=torch.bool)
         mask = []
+        train_idx, valid_idx, test_idx = [], [], []
         for i, name in tqdm(enumerate(all_keys)):
-            if name not in data_raw_X.keys():
-                continue
-            if name not in data_labels.keys() or 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
-                continue
-            
-            if name not in data_SC.keys():
-                if file_option == '_miss_graph':
-                    adjs[i, 0] = torch.zeros(200, 200)
-                    no_sc_idx[i] = True
-                else:
+            # valid and test set are pre-specified
+            if name in valid_names:
+                valid_idx.append(i)
+                
+            elif name in test_names:
+                test_idx.append(i)
+                
+            else: # train set is built here to incorporate more special graphs (missing layers / labels)
+                if name not in data_raw_X.keys():
                     continue
-            else:
-                adjs[i, 0] = torch.tensor(data_SC[name])
+                if name not in data_labels.keys() or 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
+                    continue
+                
+                if name not in data_SC.keys():
+                    if file_option == '_miss_graph':
+                        adjs[i, 0] = torch.zeros(200, 200)
+                        no_sc_idx[i] = True
+                    else:
+                        continue
+                else:
+                    adjs[i, 0] = torch.tensor(data_SC[name])
 
-            if name not in data_FC.keys():
-                if file_option == '_miss_graph':
-                    adjs[i, 1] = torch.zeros(200, 200)
-                    no_fc_idx[i] = True
+                if name not in data_FC.keys():
+                    if file_option == '_miss_graph':
+                        adjs[i, 1] = torch.zeros(200, 200)
+                        no_fc_idx[i] = True
+                    else:
+                        continue
                 else:
-                    continue
-            else:
-                adjs[i, 1] = torch.tensor(data_FC[name])
+                    adjs[i, 1] = torch.tensor(data_FC[name])
+                train_idx.append(i)
 
             labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
 
@@ -144,6 +161,8 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             raw_Xs[i] = torch.tensor(raw_X)
 
             mask.append(i)
+
+        assert len(valid_idx) == len(test_idx) == 75
         adjs = adjs[mask]
         labels = labels[mask]
         raw_Xs = raw_Xs[mask]
@@ -190,6 +209,8 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             pickle.dump(data, f)
 
         assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
+
+
 
     if eval_type == 'split':
         train_size, valid_size, test_size = \
