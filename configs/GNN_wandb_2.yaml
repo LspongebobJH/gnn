@@ -1,12 +1,12 @@
 program: run_wandb.py
 method: grid
-name: sweep-fuse-embed-nosia
+name: sweep-mew-miss-graph
 metric:
   goal: minimize
   name: best_val_rmse
 parameters:
   hid_dim:
-    values: [32, 64]
+    values: [64, 128]
   lr:
     values: [1e-2, 1e-3]
   epochs:
@@ -18,7 +18,7 @@ parameters:
   dropout:
     value: 0.5
   nlayers:
-    values: [1, 2]
+    values: [2, 3]
   split_args:
     value:
       train_size: 0.6
@@ -27,16 +27,23 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    values: [GAT_fuse_embed_nosia]
+    value: Mew
   # modality:
   #   values: [sc, fc]
-  ratio:
-    value: 0.2
-  ratio_sc:
-    values: [0.2, 0.8]
-  ratio_fc:
-    values: [0.2, 0.8]
+  # ratio:
+  #   value: 0.2
+  # ratio_sc:
+  #   values: [0.2, 0.8]
+  # ratio_fc:
+  #   values: [0.2, 0.8]
   reduce:
     value: mean
-  reduce_fuse:
-    values: [mean, concat, sum]
+  # reduce_fuse:
+  #   values: [mean, concat, sum]
+  attn_weight:
+    values: [true, false]
+  shared:
+    values: [true, false]
+  file_option:
+    value: _miss_graph
+
