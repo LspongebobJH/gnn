@@ -196,7 +196,7 @@ class MewCustom(SIGN_pred):
                 self.forward_0_miss(node_embed_1, node_embed_2, 
                                     batch, no_sc_idx, no_fc_idx, 
                                     num_graphs, num_nodes)
-        elif self.fuse_type == 'unit_miss':
+        elif self.fuse_type in ['unit_miss', 'normal']:
             graph_embed = \
                 self.forward_normal(node_embed_1, node_embed_2, batch)
         if self.num_graph_tasks > 0:

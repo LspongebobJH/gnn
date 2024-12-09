@@ -4,7 +4,7 @@ seeds=( {0..9..1} )
 exp="exp_3"
 device=4
 # models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
-models=(Mew_fuse_0_miss  Mew_fuse_unit_miss)
+models=(Mew_custom)
 for model in "${models[@]}"; do
     for seed in "${seeds[@]}"; do
         CUDA_VISIBLE_DEVICES=$device python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed $seed &

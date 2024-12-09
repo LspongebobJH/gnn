@@ -49,6 +49,8 @@ def pipe(configs: dict):
         adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = results
     elif file_option == "_miss_graph":
         adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = results
+        no_sc_idx = no_sc_idx.to(device)
+        no_fc_idx = no_fc_idx.to(device)
     train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']    
     in_dim = raw_Xs.shape[-1]
 
@@ -80,10 +82,9 @@ def pipe(configs: dict):
     elif model_name == "MewCustom":
         adjs = adjs.to(device)
         raw_Xs = raw_Xs.to(device)
-        no_sc_idx = no_sc_idx.to(device)
-        no_fc_idx = no_fc_idx.to(device)
+        
         k = configs.get('supp_k', 5)
-        fuse_type = configs.get('fuse_type', 'graph_embed')
+        fuse_type = configs.get('fuse_type', 'normal') # normal has no fusion
 
         model = MewCustom(num_feat=in_dim, num_graph_tasks=out_dim, 
                           num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
@@ -290,11 +291,11 @@ if __name__ == '__main__':
                 "label_type": "regression",
                 "attn_weight": True, 
                 "shared": False,
-                "reload": True,
+                "reload": False,
                 # "file_option": "",
-                "file_option": "_miss_graph",
+                # "file_option": "_miss_graph",
                 "supp_k": 2,
-                "fuse_type": "unit_miss"
+                # "fuse_type": "unit_miss",
             }
     if searchSpace['use_wandb']:
         run = wandb.init(
