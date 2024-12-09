@@ -165,12 +165,20 @@ class MewCustom(SIGN_pred):
         0_miss: 0 for the missing graph layer
         unit_miss: unit adjacent matrix for the missing graph layer
         baseline (Mew no fuse graph): 0 adjacent matrix for the missing graph layer, use Mew not MewCustom
+            note that baseline is different from 0_miss
         """
         batch = torch.repeat_interleave(
             torch.arange(feats.shape[0]), 
             feats.shape[-2]
         ).to(feats.device)
         num_graphs, num_nodes = feats.shape[0], feats.shape[1]
+        if self.fuse_type == 'unit_miss':
+            #TODO[jiahang]: there are many matrices of which adjs are all 0?
+            if no_sc_idx.sum() > 0:
+                adjs[no_sc_idx, 0] = torch.eye(num_nodes, device=adjs.device)
+            if no_fc_idx.sum() > 0:
+                adjs[no_fc_idx, 1] = torch.eye(num_nodes, device=adjs.device)
+
         node_embed_1 = self.sign(adjs[:, 0], feats) # geom
         node_embed_2 = self.sign2(adjs[:, 1], feats) # cell_type
 
@@ -189,7 +197,8 @@ class MewCustom(SIGN_pred):
                                     batch, no_sc_idx, no_fc_idx, 
                                     num_graphs, num_nodes)
         elif self.fuse_type == 'unit_miss':
-            pass
+            graph_embed = \
+                self.forward_normal(node_embed_1, node_embed_2, batch)
         if self.num_graph_tasks > 0:
             graph_pred = self.graph_pred_module(graph_embed)
 

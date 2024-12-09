@@ -294,7 +294,7 @@ if __name__ == '__main__':
                 # "file_option": "",
                 "file_option": "_miss_graph",
                 "supp_k": 2,
-                "fuse_type": "0_miss"
+                "fuse_type": "unit_miss"
             }
     if searchSpace['use_wandb']:
         run = wandb.init(
