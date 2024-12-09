@@ -262,7 +262,7 @@ def pipe(configs: dict):
 if __name__ == '__main__':
     log_idx = 1
     model_name = 'MewCustom'
-    seed=1
+    seed=0
     set_random_seed(seed)
     searchSpace = {
                 # "hid_dim": 64,

@@ -1,20 +1,20 @@
 #!/bin/bash
 
-# seeds=( {0..9..1} )
-# exp="exp_3"
-# device=0
-# # models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
-# models=( Mew_fuse_node_embed_on_graph_embed  Mew_fuse_graph_embed Mew_miss_graph)
-# for model in "${models[@]}"; do
-#     for seed in "${seeds[@]}"; do
-#         CUDA_VISIBLE_DEVICES=$device python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed $seed &
-#         device=$(( device + 1 ))
-#         if [ ${device} -eq 8 ]; then
-#             device=0
-#         fi
-#     done
-#     wait
-# done
+seeds=( {0..9..1} )
+exp="exp_3"
+device=4
+# models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
+models=(Mew_fuse_0_miss  Mew_fuse_unit_miss)
+for model in "${models[@]}"; do
+    for seed in "${seeds[@]}"; do
+        CUDA_VISIBLE_DEVICES=$device python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed $seed &
+        device=$(( device + 1 ))
+        if [ ${device} -eq 8 ]; then
+            device=4
+        fi
+    done
+    wait
+done
 # # wait 
 # CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 0 &
 # CUDA_VISIBLE_DEVICES=5 python run_wandb.py --wandb normal --config ./configs/Mew_best.yaml --project_name exp_1 --seed 1 &
@@ -39,7 +39,7 @@
 # CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/GCN_fuse_embed_nosia_best.yaml --project_name exp_1 --seed 3 &
 # CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb normal --config ./configs/GCN_fuse_embed_nosia_best.yaml --project_name exp_1 --seed 4 &
 
-CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb sweep --config ./configs/GNN_wandb.yaml --project_name graph_test &
+# CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb sweep --config ./configs/GNN_wandb.yaml --project_name graph_test &
 # CUDA_VISIBLE_DEVICES=2 python run_wandb.py --wandb sweep --config ./configs/GNN_wandb_1.yaml --project_name graph_test &
 # CUDA_VISIBLE_DEVICES=6 python run_wandb.py --wandb sweep --config ./configs/GNN_wandb_1.yaml --project_name graph_test &
 # CUDA_VISIBLE_DEVICES=7 python run_wandb.py --wandb sweep --config ./configs/GNN_wandb_2.yaml --project_name graph_test &
