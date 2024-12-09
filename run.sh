@@ -4,7 +4,8 @@ seeds=( {0..9..1} )
 exp="exp_3"
 device=1
 # models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
-models=( MHGCN NeuroPath Mew GCN SAGE SGC GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed )
+# models=( MHGCN NeuroPath Mew GCN SAGE SGC GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed )
+models = ( GAT GAT_fuse_embed )
 # models=(Mew_custom)
 for model in "${models[@]}"; do
     for seed in "${seeds[@]}"; do
@@ -12,6 +13,7 @@ for model in "${models[@]}"; do
         device=$(( device + 1 ))
         if [ ${device} -eq 8 ]; then
             device=1
+            wait
         fi
     done
     wait
