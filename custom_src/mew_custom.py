@@ -113,8 +113,59 @@ class MewCustom(SIGN_pred):
         graph_embed = self.pool(node_embed, batch.to(node_embed_1.device))
 
         return graph_embed
+    
+    def forward_0_miss(self, node_embed_1, node_embed_2, 
+                       batch, no_sc_idx, no_fc_idx, 
+                       num_graphs, num_nodes):
+        if self.attn_weight:
+            geom_ = self.leakyrelu(torch.mm(self.w1(node_embed_1), self.attention))
+            cell_type_ = self.leakyrelu(torch.mm(self.w2(node_embed_2), self.attention))
+        else:
+            geom_ = self.leakyrelu(torch.mm(node_embed_1, self.attention))
+            cell_type_ = self.leakyrelu(torch.mm(node_embed_2, self.attention))
+        values = torch.softmax(torch.cat((geom_, cell_type_), dim=1), dim=1)
+
+        node_embed = torch.zeros_like(node_embed_1)
+        if no_sc_idx.sum() > 0:
+            null_mask = torch.repeat_interleave(no_sc_idx, num_nodes)
+            node_embed[~null_mask] = \
+                (values[~null_mask,0].unsqueeze(1) * node_embed_1[~null_mask]) + \
+                (values[~null_mask,1].unsqueeze(1) * node_embed_2[~null_mask])
+            node_embed[null_mask] = node_embed_2[null_mask]
+        if no_fc_idx.sum() > 0:
+            null_mask = torch.repeat_interleave(no_fc_idx, num_nodes)
+            node_embed[~null_mask] = \
+                (values[~null_mask,0].unsqueeze(1) * node_embed_1[~null_mask]) + \
+                (values[~null_mask,1].unsqueeze(1) * node_embed_2[~null_mask])
+            node_embed[null_mask] = node_embed_1[null_mask]
+
+        graph_embed = self.pool(node_embed, batch.to(node_embed_1.device))
+
+        return graph_embed
+    
+    def forward_normal(self, node_embed_1, node_embed_2, batch):
+        if self.attn_weight:
+            geom_ = self.leakyrelu(torch.mm(self.w1(node_embed_1), self.attention))
+            cell_type_ = self.leakyrelu(torch.mm(self.w2(node_embed_2), self.attention))
+        else:
+            geom_ = self.leakyrelu(torch.mm(node_embed_1, self.attention))
+            cell_type_ = self.leakyrelu(torch.mm(node_embed_2, self.attention))
+
+        values = torch.softmax(torch.cat((geom_, cell_type_), dim=1), dim=1)
+        node_embed = (values[:,0].unsqueeze(1) * node_embed_1) + (values[:,1].unsqueeze(1) * node_embed_2)
+        graph_embed = self.pool(node_embed, batch.to(node_embed_1.device))
+
+        return graph_embed
 
     def forward(self, adjs, feats, no_sc_idx, no_fc_idx):
+        """
+        fuse_type:
+        graph_embed: knn on graph embed, fuse graph embed (mean)
+        node_embed_on_graph_embed: knn on graph embed, fuse node embed (mean)
+        0_miss: 0 for the missing graph layer
+        unit_miss: unit adjacent matrix for the missing graph layer
+        baseline (Mew no fuse graph): 0 adjacent matrix for the missing graph layer, use Mew not MewCustom
+        """
         batch = torch.repeat_interleave(
             torch.arange(feats.shape[0]), 
             feats.shape[-2]
@@ -132,6 +183,13 @@ class MewCustom(SIGN_pred):
                 self.fuse_node_embed_on_graph_embed(node_embed_1, node_embed_2, 
                                                     batch, no_sc_idx, no_fc_idx, 
                                                     num_graphs, num_nodes)
+        elif self.fuse_type == '0_miss':
+            graph_embed = \
+                self.forward_0_miss(node_embed_1, node_embed_2, 
+                                    batch, no_sc_idx, no_fc_idx, 
+                                    num_graphs, num_nodes)
+        elif self.fuse_type == 'unit_miss':
+            pass
         if self.num_graph_tasks > 0:
             graph_pred = self.graph_pred_module(graph_embed)
 

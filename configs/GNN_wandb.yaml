@@ -1,7 +1,7 @@
 program: run_wandb.py
 method: grid
 # name: sweep-mew-fuse-node-embed-on-graph-embed
-name: sweep-mew-fuse-graph-embed-2
+name: sweep-mew-fuse-0-miss
 metric:
   goal: minimize
   name: best_val_rmse
@@ -51,5 +51,6 @@ parameters:
     values: [2, 5, 8]
   fuse_type:
     # value: node_embed_on_graph_embed
-    value: graph_embed
+    # value: graph_embed
+    value: 0_miss
 
