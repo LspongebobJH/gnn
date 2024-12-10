@@ -60,7 +60,6 @@ def pipe(configs: dict):
     else:
         out_dim = 1
 
-
     data = None
     if model_name == 'MHGCN':
         model = MHGCN(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, dropout=dropout)
@@ -282,7 +281,7 @@ if __name__ == '__main__':
     set_random_seed(seed)
     searchSpace = {
                 # "hid_dim": 64,
-                "hid_dim": 1,
+                "hid_dim": 2,
                 "lr": 1e-2,
                 "epochs": 2000,
                 "patience": -1,
@@ -313,7 +312,7 @@ if __name__ == '__main__':
                 # "fuse_type": "unit_miss",
                 "knn_on": "graph_embed",
                 "fuse_on": "node_embed",
-                "fuse_method": "mean"
+                "fuse_method": "GAT"
             }
     if searchSpace['use_wandb']:
         run = wandb.init(

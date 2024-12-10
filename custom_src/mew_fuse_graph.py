@@ -1,22 +1,24 @@
 import torch
 from torch import nn
-
+import torch.nn.functional as F
 from torch_scatter import scatter
 import numpy as np
 
 from .mew import SIGN_pred, SIGN_v2
 
-from dgl import DGLError, remove_self_loop, remove_edges, EID
+from dgl import DGLError, remove_self_loop, remove_edges, EID, add_self_loop
 from dgl.base import dgl_warning
 from dgl.transforms.functional import pairwise_squared_distance
 from dgl.sampling import sample_neighbors
 from dgl.transforms.functional import convert
 import dgl.backend as dglF
+from dgl.nn.pytorch.conv import GraphConv, SAGEConv, SGConv, GATConv
 from .mew_custom import SIGNv2Custom, knn_graph
 
 class MewFuseGraph(SIGN_pred):
     def __init__(self, num_layer, num_feat, emb_dim, drop_ratio, shared, 
                  k=None, knn_on="graph_embed", fuse_on='graph_embed', fuse_method="mean",
+                 gnn_add_self_loop=False,
                  *args, **kwargs):
         super().__init__(num_layer, num_feat, emb_dim, drop_ratio=drop_ratio, shared=shared, *args, **kwargs)
         self.k = k
@@ -25,6 +27,41 @@ class MewFuseGraph(SIGN_pred):
         self.knn_on = knn_on
         self.fuse_on = fuse_on
         self.fuse_method = fuse_method
+        self.gnn_add_self_loop = gnn_add_self_loop
+        self.dropout = nn.Dropout(drop_ratio)
+
+        self.simple_prim = ['mean', 'sum', 'min', 'max']
+        self.gnn_dict = {
+            'GCN': GraphConv,
+            'SAGE': SAGEConv,
+            'GAT': GATConv
+        }
+        if fuse_method in self.gnn_dict.keys():
+            self.gnn = nn.ModuleList([]) # shared by two branches?
+
+            configs_first = {
+                "in_feats": emb_dim, 
+                "out_feats": emb_dim
+            }
+            if fuse_method == 'GAT':
+                configs_first["num_heads"] = 2
+            elif fuse_method == 'SAGE':
+                configs_first["aggregator_type"] = "mean"
+            
+            configs_hid = configs_first.copy()
+            if fuse_method == 'GAT':
+                configs_hid["in_feats"] = emb_dim * 2
+
+            self.gnn.append(
+                    self.gnn_dict[fuse_method](**configs_first)
+                )  
+            for _ in range(num_layer-1):
+                self.gnn.append(
+                    self.gnn_dict[fuse_method](**configs_hid)
+                )
+
+            
+            
 
     def build_knn_graph(self, node_embed_basis, batch, null_mask):
         """
@@ -57,11 +94,25 @@ class MewFuseGraph(SIGN_pred):
             embed = node_embed.reshape(num_graphs, num_nodes, -1)
 
         if null_mask.sum() > 0:
-            if self.fuse_method == 'mean':
+            if self.fuse_method in self.simple_prim:
                 knn_n, target_n = knn_g.in_edges(v=torch.where(null_mask)[0])
                 embed[null_mask] = scatter(embed[knn_n], target_n, 
                                         reduce=self.fuse_method, dim=0, 
                                         dim_size=embed.shape[0])[null_mask]
+                
+            elif self.fuse_method in self.gnn_dict.keys():
+                knn_g = add_self_loop(knn_g) if self.gnn_add_self_loop else knn_g
+                for layer in self.gnn[:-1]:
+                    embed = self.dropout(
+                         F.relu(layer(knn_g, embed))
+                    )
+                    if self.fuse_method == 'GAT':
+                        embed = embed.flatten(-2)
+                embed = self.dropout(
+                            F.relu(self.gnn[-1](knn_g, embed))
+                        )
+                if self.fuse_method == 'GAT':
+                    embed = embed.mean(-2)
 
         return embed
     
