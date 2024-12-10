@@ -18,7 +18,7 @@ def main(seed=0, config=None):
         wandb.init(project=project_name)
     config = wandb.config
     if config.model_name in \
-        ['MHGCN', 'NeuroPath', 'Mew', 'MewCustom'] \
+        ['MHGCN', 'NeuroPath', 'Mew', 'MewCustom', 'MewFuseGraph'] \
             + SINGLE_MODALITY_MODELS \
             + FUSE_SINGLE_MODALITY_MODELS \
             + FUSE_SINGLE_MODALITY_MODELS_NOSIA:
