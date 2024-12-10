@@ -8,7 +8,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 from MHGCN_src import MHGCN
 from NeuroPath_src import DetourTransformer, Transformer, GAT, Vanilla
 from custom_src import VanillaFuse, GATFuse, VanillaFuseNoSia, GATFuseNoSia, \
-    SIGN_pred, MewCustom
+    SIGN_pred, MewCustom, MewFuseGraph
 from utils import set_random_seed, load_dataset, model_infer, \
     Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS, \
     FUSE_SINGLE_MODALITY_MODELS, FUSE_SINGLE_MODALITY_MODELS_NOSIA, \
@@ -91,7 +91,22 @@ def pipe(configs: dict):
                           graph_pooling=reduce,
                           attn_weight=configs['attn_weight'],
                           shared=configs['shared'], k=k, fuse_type=fuse_type)
-        
+    elif model_name == 'MewFuseGraph':
+        adjs = adjs.to(device)
+        raw_Xs = raw_Xs.to(device)
+
+        k = configs.get('supp_k', 5)
+        knn_on = configs.get('knn_on', "graph_embed")
+        fuse_on = configs.get('fuse_on', "graph_embed")
+        fuse_method = configs.get('fuse_method', "mean")
+
+        model = MewFuseGraph(num_feat=in_dim, num_graph_tasks=out_dim, 
+                            num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
+                            graph_pooling=reduce,
+                            attn_weight=configs['attn_weight'],
+                            shared=configs['shared'], 
+                            k=k, knn_on=knn_on, fuse_on=fuse_on, fuse_method=fuse_method)
+            
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.2)
         ratio_fc = configs.get('ratio_fc', 0.2)
@@ -262,12 +277,12 @@ def pipe(configs: dict):
 
 if __name__ == '__main__':
     log_idx = 1
-    model_name = 'MewCustom'
+    model_name = 'MewFuseGraph'
     seed=0
     set_random_seed(seed)
     searchSpace = {
                 # "hid_dim": 64,
-                "hid_dim": 8,
+                "hid_dim": 1,
                 "lr": 1e-2,
                 "epochs": 2000,
                 "patience": -1,
@@ -293,9 +308,12 @@ if __name__ == '__main__':
                 "shared": False,
                 "reload": False,
                 # "file_option": "",
-                # "file_option": "_miss_graph",
+                "file_option": "_miss_graph",
                 "supp_k": 2,
                 # "fuse_type": "unit_miss",
+                "knn_on": "graph_embed",
+                "fuse_on": "node_embed",
+                "fuse_method": "mean"
             }
     if searchSpace['use_wandb']:
         run = wandb.init(

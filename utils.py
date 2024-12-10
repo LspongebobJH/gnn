@@ -46,7 +46,7 @@ def model_infer(model, model_name, **kwargs):
         data = kwargs['data']
         logits = model(data)
 
-    elif model_name == 'MewCustom':
+    elif model_name in ['MewCustom', 'MewFuseGraph']:
         adjs, raw_Xs, no_sc_idx, no_fc_idx = \
             kwargs['adjs'], kwargs['raw_Xs'], kwargs['no_sc_idx'], kwargs['no_fc_idx']
         logits = model(adjs, raw_Xs, no_sc_idx, no_fc_idx)
