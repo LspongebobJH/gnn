@@ -8,7 +8,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 from MHGCN_src import MHGCN
 from NeuroPath_src import DetourTransformer, Transformer, GAT, Vanilla
 from custom_src import VanillaFuse, GATFuse, VanillaFuseNoSia, GATFuseNoSia, \
-    SIGN_pred, MewCustom, MewFuseGraph
+    SIGN_pred, MewCustom, MewFuseGraph, LabelProp
 from utils import set_random_seed, load_dataset, model_infer, \
     Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS, \
     FUSE_SINGLE_MODALITY_MODELS, FUSE_SINGLE_MODALITY_MODELS_NOSIA, \
@@ -64,15 +64,6 @@ def pipe(configs: dict):
         out_dim = (max(labels)+1).item()
     else:
         out_dim = 1
-    
-    """
-    loading label propagation model
-    """
-
-    
-    """
-    loading label propagation model - end
-    """
 
     data = None
     """
@@ -116,6 +107,7 @@ def pipe(configs: dict):
         fuse_on = configs.get('fuse_on', "graph_embed")
         fuse_method = configs.get('fuse_method', "mean")
         add_self_loop = configs.get('add_self_loop', False)
+        null_filter = configs.get('null_filter', True)
 
         model = MewFuseGraph(num_feat=in_dim, num_graph_tasks=out_dim, 
                             num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
@@ -123,7 +115,7 @@ def pipe(configs: dict):
                             attn_weight=configs['attn_weight'],
                             shared=configs['shared'], 
                             k=k, knn_on=knn_on, fuse_on=fuse_on, fuse_method=fuse_method, 
-                            gnn_add_self_loop=add_self_loop)
+                            gnn_add_self_loop=add_self_loop, null_filter=null_filter)
             
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.2)
@@ -185,8 +177,16 @@ def pipe(configs: dict):
     """
     loading model - end
     """
-            
-            
+
+    """
+    loading label propagation model
+    """
+
+    if "_miss_label" in file_option:
+        label_prop = LabelProp()
+    """
+    loading label propagation model - end
+    """
     model = model.to(device)                            
     labels = labels.to(device)
 
@@ -203,6 +203,7 @@ def pipe(configs: dict):
     best_val_rmse = torch.inf
     best_test_rmse = torch.inf
     cnt = 0
+    ori_labels = labels
     for epoch in range(epochs):
         model.train()
         if epoch == 1000 and  model_name == 'MHGCN':
@@ -211,6 +212,9 @@ def pipe(configs: dict):
         logits = model_infer(model, model_name, adjs=adjs,
                              raw_Xs=raw_Xs, data=data, 
                              no_sc_idx=no_sc_idx, no_fc_idx=no_fc_idx)
+        if "_miss_label" in file_option: # only applicable to MewFuseGraph now
+            labels = ori_labels
+            labels = label_prop(labels, no_lbl_idx, model.knn_sc, model.knn_fc)
         loss = loss_fn(logits[train_idx], labels[train_idx])
         optimizer.zero_grad()
         loss.backward()
@@ -328,14 +332,15 @@ if __name__ == '__main__':
                 "shared": False,
                 # "reload": True,
                 # "file_option": "",
-                # "file_option": "_miss_graph",
-                "file_option": "_miss_graph_miss_label",
+                "file_option": "_miss_graph",
+                # "file_option": "_miss_graph_miss_label",
                 "supp_k": 2,
                 # "fuse_type": "unit_miss",
                 "knn_on": "graph_embed",
                 "fuse_on": "node_embed",
-                "fuse_method": "GAT",
-                "add_self_loop": True
+                "fuse_method": "GCN",
+                "add_self_loop": True,
+                "null_filter": False
             }
     if searchSpace['use_wandb']:
         run = wandb.init(

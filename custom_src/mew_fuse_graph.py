@@ -18,7 +18,7 @@ from .mew_custom import SIGNv2Custom, knn_graph
 class MewFuseGraph(SIGN_pred):
     def __init__(self, num_layer, num_feat, emb_dim, drop_ratio, shared, 
                  k=None, knn_on="graph_embed", fuse_on='graph_embed', fuse_method="mean",
-                 gnn_add_self_loop=False,
+                 gnn_add_self_loop=False, null_filter=True,
                  *args, **kwargs):
         super().__init__(num_layer, num_feat, emb_dim, drop_ratio=drop_ratio, shared=shared, *args, **kwargs)
         self.k = k
@@ -28,7 +28,10 @@ class MewFuseGraph(SIGN_pred):
         self.fuse_on = fuse_on
         self.fuse_method = fuse_method
         self.gnn_add_self_loop = gnn_add_self_loop
+        self.null_filter = null_filter
         self.dropout = nn.Dropout(drop_ratio)
+
+        self.knn_sc, self.knn_fc = None, None
 
         self.simple_prim = ['mean', 'sum', 'min', 'max']
         self.gnn_dict = {
@@ -66,15 +69,13 @@ class MewFuseGraph(SIGN_pred):
         input: node embedding to build the basis of knn graph, obtain by SIGN
         output: knn graph
         """
-        if null_mask.sum() > 0:
-            if self.knn_on == 'graph_embed': # knn_base == graph_embed
-                embed = self.pool(node_embed_basis, batch.to(node_embed_basis.device))
-            elif self.knn_on == 'node_embed':
-                embed = node_embed_basis.flatten(1)
+        
+        if self.knn_on == 'graph_embed': # knn_base == graph_embed
+            embed = self.pool(node_embed_basis, batch.to(node_embed_basis.device))
+        elif self.knn_on == 'node_embed':
+            embed = node_embed_basis.flatten(1)
 
-            knn_g = knn_graph(embed, null_mask, self.k, exclude_self=True)
-        else:
-            knn_g = None
+        knn_g = knn_graph(embed, null_mask, self.k, exclude_self=True, null_filter=self.null_filter)
         
         return knn_g
     
@@ -158,9 +159,11 @@ class MewFuseGraph(SIGN_pred):
 
         knn_g = self.build_knn_graph(node_embed_basis=node_embed_2, batch=batch, null_mask=no_sc_idx)
         embed1 = self.fusion(node_embed_1, knn_g, batch, no_sc_idx, num_graphs, num_nodes)
+        self.knn_sc = knn_g
         
         knn_g = self.build_knn_graph(node_embed_basis=node_embed_1, batch=batch, null_mask=no_fc_idx)
         embed2 = self.fusion(node_embed_2, knn_g, batch, no_fc_idx, num_graphs, num_nodes)
+        self.knn_fc = knn_g
 
         graph_embed = self.gen_graph_embed(embed1, embed2, batch, num_graphs, num_nodes)
         

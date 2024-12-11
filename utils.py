@@ -142,7 +142,7 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
                     continue
                 if name not in data_labels.keys() or 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
                     if '_miss_label' in file_option:
-                        labels[i] = -1
+                        labels[i] = 0.
                         no_lbl_idx[i] = True
                     else:
                         continue

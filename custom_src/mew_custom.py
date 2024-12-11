@@ -209,8 +209,13 @@ adapted from dgl.knn_graph, but add some constraints
 """
 
 def knn_graph(
-    x, null_idx, k, algorithm="bruteforce-blas", dist="euclidean", exclude_self=False
+    x, null_idx, k, algorithm="bruteforce-blas", dist="euclidean", exclude_self=False, null_filter=True
 ):
+    """
+    null_filter: if true, when constructing similarity matrix, similarity items between null graphs will
+        be set to inf so that null graphs are not connected. this is to prevent noises of null graphs being
+        propagated to other null graphs.
+    """
     if exclude_self:
         # add 1 to k, for the self edge, since it will be removed
         k = k + 1
@@ -227,7 +232,7 @@ def knn_graph(
     d = dglF.ndim(x)
     x_seg = x_size[0] * [x_size[1]] if d == 3 else [x_size[0]]
     if algorithm == "bruteforce-blas":
-        result = _knn_graph_blas(x, null_idx, k, dist=dist)
+        result = _knn_graph_blas(x, null_idx, k, dist=dist, null_filter=null_filter)
 
     if exclude_self:
         # remove_self_loop will update batch_num_edges as needed
@@ -254,7 +259,7 @@ def knn_graph(
 
 
 
-def _knn_graph_blas(x, null_idx, k, dist="euclidean"):
+def _knn_graph_blas(x, null_idx, k, dist="euclidean", null_filter=True):
     if dglF.ndim(x) == 2:
         x = dglF.unsqueeze(x, 0)
     n_samples, n_points, _ = dglF.shape(x)
@@ -275,9 +280,10 @@ def _knn_graph_blas(x, null_idx, k, dist="euclidean"):
     ctx = dglF.context(x)
     dist = pairwise_squared_distance(x)
     # Jiahang: revise such that null graphs not in neighbors
-    null_idx_2d = (null_idx.unsqueeze(-1).float() @ null_idx.unsqueeze(0).float()).bool()
-    dist[:, null_idx_2d] = torch.inf
-    dist[:, null_idx, null_idx] = 0.
+    if null_filter:
+        null_idx_2d = (null_idx.unsqueeze(-1).float() @ null_idx.unsqueeze(0).float()).bool()
+        dist[:, null_idx_2d] = torch.inf
+        dist[:, null_idx, null_idx] = 0.
 
     k_indices = dglF.astype(dglF.argtopk(dist, k, 2, descending=False), dglF.int64)
     # index offset for each sample

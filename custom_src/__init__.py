@@ -4,3 +4,4 @@ from .mew import SIGN_pred
 from .gig import GIG
 from .mew_custom import MewCustom
 from .mew_fuse_graph import MewFuseGraph
+from .label_prop import LabelProp
