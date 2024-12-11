@@ -59,10 +59,7 @@ class MewFuseGraph(SIGN_pred):
                 self.gnn.append(
                     self.gnn_dict[fuse_method](**configs_hid)
                 ) 
-
             
-            
-
     def build_knn_graph(self, node_embed_basis, batch, null_mask):
         """
         for single branch

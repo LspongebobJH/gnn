@@ -64,8 +64,15 @@ def pipe(configs: dict):
         out_dim = (max(labels)+1).item()
     else:
         out_dim = 1
+    
+    """
+    loading label propagation model
+    """
 
     
+    """
+    loading label propagation model - end
+    """
 
     data = None
     """
@@ -321,8 +328,8 @@ if __name__ == '__main__':
                 "shared": False,
                 # "reload": True,
                 # "file_option": "",
-                "file_option": "_miss_graph",
-                # "file_option": "_miss_graph_miss_label",
+                # "file_option": "_miss_graph",
+                "file_option": "_miss_graph_miss_label",
                 "supp_k": 2,
                 # "fuse_type": "unit_miss",
                 "knn_on": "graph_embed",
