@@ -2,15 +2,21 @@
 
 seeds=( {0..9..1} )
 exp="exp_4"
-device=0
+device=1
 # models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
 # models=( MHGCN NeuroPath Mew GCN SAGE SGC GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed )
 models=( MewFuseGraph_fuse_method_GCN MewFuseGraph_fuse_method_SAGE)
 # models=(Mew_custom)
-
+cnt=0
 for model in "${models[@]}"; do
     for seed in "${seeds[@]}"; do
         CUDA_VISIBLE_DEVICES=$device python run_wandb.py --wandb normal --config ./configs/${model}_best.yaml --project_name ${exp} --seed $seed &
+
+        cnt=$(( cnt + 1 ))
+        _cnt=$(( cnt % 5 ))
+        if [ ${_cnt} -eq 0 ]; then
+            wait
+        fi
         # device=$(( device + 1 ))
         # if [ ${device} -eq 8 ]; then
         #     device=
