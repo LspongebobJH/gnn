@@ -58,7 +58,7 @@ class MewFuseGraph(SIGN_pred):
             for _ in range(num_layer-1):
                 self.gnn.append(
                     self.gnn_dict[fuse_method](**configs_hid)
-                )
+                ) 
 
             
             

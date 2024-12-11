@@ -47,10 +47,15 @@ def pipe(configs: dict):
     no_sc_idx, no_fc_idx = None, None
     if file_option == "":
         adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = results
-    elif file_option == "_miss_graph":
+    elif "_miss_graph" in file_option :
         adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = results
         no_sc_idx = no_sc_idx.to(device)
         no_fc_idx = no_fc_idx.to(device)
+    elif "_miss_label" in file_option:
+        adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx, no_lbl_idx = results
+        no_sc_idx = no_sc_idx.to(device)
+        no_fc_idx = no_fc_idx.to(device)
+        no_lbl_idx = no_lbl_idx.to(device)
     train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']    
     in_dim = raw_Xs.shape[-1]
 
@@ -276,7 +281,7 @@ def pipe(configs: dict):
 
 if __name__ == '__main__':
     log_idx = 1
-    model_name = 'MewFuseGraph'
+    model_name = 'GCN'
     seed=0
     set_random_seed(seed)
     searchSpace = {
@@ -305,9 +310,10 @@ if __name__ == '__main__':
                 "label_type": "regression",
                 "attn_weight": True, 
                 "shared": False,
-                "reload": False,
+                # "reload": True,
                 # "file_option": "",
-                "file_option": "_miss_graph",
+                # "file_option": "_miss_graph",
+                "file_option": "_miss_graph_miss_label",
                 "supp_k": 2,
                 # "fuse_type": "unit_miss",
                 "knn_on": "graph_embed",

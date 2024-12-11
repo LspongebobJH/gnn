@@ -65,9 +65,11 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
                 cross evalidation
     """
     # TODO train-valid-test split, and cross-validation
-    assert label_type in ['classification', 'regression']
-    assert eval_type in ['split', 'cross']
-    assert file_option in ['', '_miss_graph']
+    # assert label_type in ['classification', 'regression']
+    assert label_type == 'regression'
+    # assert eval_type in ['split', 'cross']
+    assert eval_type == 'split'
+    assert file_option in ['', '_miss_graph', '_miss_graph_miss_label']
     if eval_type == 'split':
         assert split_args is not None
 
@@ -81,9 +83,11 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         labels = data['labels']
         mu_lbls = data['mu_lbls']
         std_lbls = data['std_lbls']
-        if file_option == '_miss_graph':
+        if '_miss_graph' in file_option:
             no_sc_idx = data['no_sc_idx']
             no_fc_idx = data['no_fc_idx']
+        if '_miss_label' in file_option:
+            no_lbl_idx = data['no_lbl_idx']
     else:
         dir_path = os.path.dirname(os.path.realpath(__file__))
         dir_path = os.path.join(dir_path, 'dataset', 'valid_test_split')
@@ -117,26 +121,36 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         adjs = torch.zeros((data_size, 2, 200, 200))
         labels = torch.zeros(data_size)
         raw_Xs = torch.zeros((data_size, 200, 9))
-        no_sc_idx, no_fc_idx = \
-            torch.zeros(data_size, dtype=torch.bool), torch.zeros(data_size, dtype=torch.bool)
+        no_sc_idx, no_fc_idx, no_lbl_idx = \
+            torch.zeros(data_size, dtype=torch.bool), \
+            torch.zeros(data_size, dtype=torch.bool), \
+            torch.zeros(data_size, dtype=torch.bool)
         mask = []
         train_idx, valid_idx, test_idx = [], [], []
         for i, name in tqdm(enumerate(all_keys)):
             # valid and test set are pre-specified
             if name in valid_names:
                 valid_idx.append(i)
+                labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
                 
             elif name in test_names:
                 test_idx.append(i)
+                labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
                 
             else: # train set is built here to incorporate more special graphs (missing layers / labels)
                 if name not in data_raw_X.keys():
                     continue
                 if name not in data_labels.keys() or 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
-                    continue
+                    if '_miss_label' in file_option:
+                        labels[i] = -1
+                        no_lbl_idx[i] = True
+                    else:
+                        continue
+                else:
+                    labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
                 
                 if name not in data_SC.keys():
-                    if file_option == '_miss_graph':
+                    if '_miss_graph' in file_option:
                         adjs[i, 0] = torch.zeros(200, 200)
                         no_sc_idx[i] = True
                     else:
@@ -145,7 +159,7 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
                     adjs[i, 0] = torch.tensor(data_SC[name])
 
                 if name not in data_FC.keys():
-                    if file_option == '_miss_graph':
+                    if '_miss_graph' in file_option:
                         adjs[i, 1] = torch.zeros(200, 200)
                         no_fc_idx[i] = True
                     else:
@@ -153,8 +167,6 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
                 else:
                     adjs[i, 1] = torch.tensor(data_FC[name])
                 train_idx.append(i)
-
-            labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
 
             raw_X = data_raw_X[name].drop(columns=['StructName'])
             raw_X = raw_X.to_numpy().astype(float)
@@ -168,6 +180,7 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         raw_Xs = raw_Xs[mask]
         no_sc_idx = no_sc_idx[mask]
         no_fc_idx = no_fc_idx[mask]
+        no_lbl_idx = no_lbl_idx[mask]
 
         mu_lbls, std_lbls = None, None
         if label_type == 'classification':
@@ -177,8 +190,10 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             labels = labels_class
 
         else:
-            mu_lbls, std_lbls = labels.mean(), labels.std()
-            labels = (labels - mu_lbls) / std_lbls
+            if '_miss_label' not in file_option:
+                mu_lbls, std_lbls = labels.mean(), labels.std()
+                labels = (labels - mu_lbls) / std_lbls
+                
         
         batchnorm = nn.BatchNorm1d(raw_Xs.shape[-1], affine=False)
         layernorm = nn.LayerNorm([adjs.shape[-2], adjs.shape[-1]], elementwise_affine=False)
@@ -201,16 +216,16 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             'std_lbls': std_lbls,
         }
 
-        if file_option == '_miss_graph':
+        if '_miss_graph' in file_option:
             data['no_sc_idx'] = no_sc_idx
             data['no_fc_idx'] = no_fc_idx
+        if '_miss_label' in file_option:
+            data['no_lbl_idx'] = no_lbl_idx
 
         with open(file_path, 'wb') as f:
             pickle.dump(data, f)
 
         assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
-
-
 
     if eval_type == 'split':
         train_size, valid_size, test_size = \
@@ -230,8 +245,10 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         kfold = KFold(n_splits=5, shuffle=True)
         splits = list(kfold.split(X=idx))
 
-    if file_option == '_miss_graph':
+    if '_miss_graph' in file_option:
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx
+    elif '_miss_label' in file_option:
+        return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx, no_lbl_idx
     else:
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
 def set_random_seed(seed):
