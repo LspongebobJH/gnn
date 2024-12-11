@@ -1,7 +1,7 @@
 program: run_wandb.py
 method: grid
 # name: sweep-mew-fuse-node-embed-on-graph-embed
-name: sweep-MewFuseGraph
+name: sweep-MewFuseGraph-addSelfLoop
 metric:
   goal: minimize
   name: best_val_rmse
