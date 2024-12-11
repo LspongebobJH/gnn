@@ -59,3 +59,5 @@ parameters:
     value: node_embed
   fuse_method:
     values: [GCN, SAGE, GAT]
+  add_self_loop:
+    value: true

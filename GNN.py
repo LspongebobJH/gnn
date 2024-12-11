@@ -47,11 +47,11 @@ def pipe(configs: dict):
     no_sc_idx, no_fc_idx = None, None
     if file_option == "":
         adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = results
-    elif "_miss_graph" in file_option :
+    elif file_option == "_miss_graph":
         adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = results
         no_sc_idx = no_sc_idx.to(device)
         no_fc_idx = no_fc_idx.to(device)
-    elif "_miss_label" in file_option:
+    elif file_option == "_miss_graph_miss_label":
         adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx, no_lbl_idx = results
         no_sc_idx = no_sc_idx.to(device)
         no_fc_idx = no_fc_idx.to(device)
@@ -65,7 +65,12 @@ def pipe(configs: dict):
     else:
         out_dim = 1
 
+    
+
     data = None
+    """
+    loading model
+    """
     if model_name == 'MHGCN':
         model = MHGCN(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, dropout=dropout)
 
@@ -103,13 +108,15 @@ def pipe(configs: dict):
         knn_on = configs.get('knn_on', "graph_embed")
         fuse_on = configs.get('fuse_on', "graph_embed")
         fuse_method = configs.get('fuse_method', "mean")
+        add_self_loop = configs.get('add_self_loop', False)
 
         model = MewFuseGraph(num_feat=in_dim, num_graph_tasks=out_dim, 
                             num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
                             graph_pooling=reduce,
                             attn_weight=configs['attn_weight'],
                             shared=configs['shared'], 
-                            k=k, knn_on=knn_on, fuse_on=fuse_on, fuse_method=fuse_method)
+                            k=k, knn_on=knn_on, fuse_on=fuse_on, fuse_method=fuse_method, 
+                            gnn_add_self_loop=add_self_loop)
             
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.2)
@@ -168,7 +175,9 @@ def pipe(configs: dict):
                 model = VanillaFuseNoSia(model_name=model_name, in_dim=in_dim, hid_dim=hid_dim, 
                             nlayers=nlayers, dropout=dropout, nclass=out_dim, 
                             reduce_nodes=reduce, reduce_fuse=reduce_fuse)
-
+    """
+    loading model - end
+    """
             
             
     model = model.to(device)                            
@@ -281,7 +290,7 @@ def pipe(configs: dict):
 
 if __name__ == '__main__':
     log_idx = 1
-    model_name = 'GCN'
+    model_name = 'MewFuseGraph'
     seed=0
     set_random_seed(seed)
     searchSpace = {
@@ -312,13 +321,14 @@ if __name__ == '__main__':
                 "shared": False,
                 # "reload": True,
                 # "file_option": "",
-                # "file_option": "_miss_graph",
-                "file_option": "_miss_graph_miss_label",
+                "file_option": "_miss_graph",
+                # "file_option": "_miss_graph_miss_label",
                 "supp_k": 2,
                 # "fuse_type": "unit_miss",
                 "knn_on": "graph_embed",
                 "fuse_on": "node_embed",
-                "fuse_method": "GAT"
+                "fuse_method": "GAT",
+                "add_self_loop": True
             }
     if searchSpace['use_wandb']:
         run = wandb.init(

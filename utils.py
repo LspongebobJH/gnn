@@ -245,9 +245,9 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         kfold = KFold(n_splits=5, shuffle=True)
         splits = list(kfold.split(X=idx))
 
-    if '_miss_graph' in file_option:
+    if file_option == "_miss_graph":
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx
-    elif '_miss_label' in file_option:
+    elif file_option == "_miss_graph_miss_label":
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx, no_lbl_idx
     else:
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
