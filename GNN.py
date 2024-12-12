@@ -4,6 +4,7 @@ import wandb
 import numpy as np
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+from argparse import ArgumentParser
 
 from MHGCN_src import MHGCN
 from NeuroPath_src import DetourTransformer, Transformer, GAT, Vanilla
@@ -301,6 +302,14 @@ def pipe(configs: dict):
     # return train_acc_list, valid_acc_list, test_acc_list, acc
 
 if __name__ == '__main__':
+
+    parser = ArgumentParser()
+
+    parser.add_argument('--file_option', type=str, choices=['', '_miss_graph'], default="")
+    parser.add_argument('--online_split', type=str, choices=['True', 'False'], default=False)
+
+    args = parser.parse_args()
+
     log_idx = 1
     model_name = 'GCN'
     seed=0
@@ -333,16 +342,18 @@ if __name__ == '__main__':
                 "shared": False,
                 "reload": True,
                 # "file_option": "",
-                "file_option": "_miss_graph",
+                # "file_option": "_miss_graph",
                 # "file_option": "_miss_graph_miss_label",
+                "file_option": args.file_option,
                 "supp_k": 2,
                 # "fuse_type": "unit_miss",
                 "knn_on": "graph_embed",
                 "fuse_on": "node_embed",
                 "fuse_method": "GCN",
-                # "a¡dd_self_loop": True,
+                # "add_self_loop": True,
                 # "null_filter": False
-                "online_split": True
+                # "online_split": True
+                "online_split": True if args.online_split == 'True' else False
             }
     if searchSpace['use_wandb']:
         run = wandb.init(
