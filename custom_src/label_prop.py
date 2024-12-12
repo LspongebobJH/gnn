@@ -21,7 +21,9 @@ class LabelProp(nn.Module):
                 # the average will induce much noise.
 
                 labeled_samples = torch.where(~null_mask)[0]
-                knn_g = out_subgraph(knn_g, labeled_samples) # out edges of unlabeled samples are removed
+                # out edges of unlabeled samples are removed to avoid
+                # 
+                knn_g = out_subgraph(knn_g, labeled_samples) 
                 knn_n, target_n = knn_g.in_edges(v=torch.where(null_mask)[0])
                 # idx not equivalent to null_mask since some samples 
                 # are removed if they have no input labeled samples.
@@ -33,8 +35,10 @@ class LabelProp(nn.Module):
         return lbls
 
     def forward(self, lbls, no_lbl_idx, knn_sc, knn_fc, train_idx):
+        # remove valid and test samples from graphs to avoid label leakage
         knn_sc = node_subgraph(knn_sc, train_idx, relabel_nodes=False, store_ids=False)
         knn_fc = node_subgraph(knn_fc, train_idx, relabel_nodes=False, store_ids=False)
+
         lbls1 = self.fusion(lbls, knn_sc, no_lbl_idx)
         lbls2 = self.fusion(lbls, knn_fc, no_lbl_idx)
 

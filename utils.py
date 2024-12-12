@@ -88,8 +88,6 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         labels = data['labels']
         mu_lbls = data['mu_lbls']
         std_lbls = data['std_lbls']
-        train_idx, valid_idx, test_idx = \
-            data['train_idx'], data['valid_idx'], data['train_idx']
         if '_miss_graph' in file_option:
             no_sc_idx = data['no_sc_idx']
             no_fc_idx = data['no_fc_idx']
@@ -234,28 +232,21 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         if '_miss_label' in file_option:
             data['no_lbl_idx'] = no_lbl_idx
 
-        with open(file_path, 'wb') as f:
-            pickle.dump(data, f)
-
         assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
-        if online_split:
-            if eval_type == 'split':
-                train_size, valid_size, test_size = \
-                    split_args['train_size'], split_args['valid_size'], split_args['test_size']
-                idx = np.arange(len(labels))
-                train_valid_idx, test_idx = \
-                    train_test_split(idx, test_size=test_size)
-                train_idx, valid_idx = \
-                    train_test_split(train_valid_idx, 
-                                    test_size=valid_size / (train_size + valid_size))
-            elif eval_type == 'cross':
-                kfold = KFold(n_splits=5, shuffle=True)
-                splits = list(kfold.split(X=idx))
-        splits = {
-                    'train_idx': train_idx,
-                    'valid_idx': valid_idx,
-                    'test_idx': test_idx,
-                }
+
+    if online_split:
+        if eval_type == 'split':
+            train_size, valid_size, test_size = \
+                split_args['train_size'], split_args['valid_size'], split_args['test_size']
+            idx = np.arange(len(labels))
+            train_valid_idx, test_idx = \
+                train_test_split(idx, test_size=test_size)
+            train_idx, valid_idx = \
+                train_test_split(train_valid_idx, 
+                                test_size=valid_size / (train_size + valid_size))
+        elif eval_type == 'cross':
+            kfold = KFold(n_splits=5, shuffle=True)
+            splits = list(kfold.split(X=idx))
 
     if not online_split:
         assert valid_idx.sum() == test_idx.sum() == 75
@@ -273,6 +264,193 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx, no_lbl_idx
     else:
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
+
+def load_dataset1(label_type='classification', eval_type='split', split_args: dict = None, 
+                 cross_args: dict = None, reload = False, 
+                 file_option = "", seed=0, version=1, online_split = True):
+    """
+
+    similar to load_dataset, but in this func we don't save at / load from any local dataset
+    since it's trick to implement valid and test masks in these cases.
+    """
+    # TODO train-valid-test split, and cross-validation
+    # assert label_type in ['classification', 'regression']
+    assert label_type == 'regression'
+    # assert eval_type in ['split', 'cross']
+    assert eval_type == 'split'
+    assert file_option in ['', '_miss_graph', '_miss_graph_miss_label']
+    if eval_type == 'split':
+        assert split_args is not None
+
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    dir_path = os.path.join(dir_path, 'dataset', 'valid_test_split')
+    path = os.path.join(dir_path, f'v{version}.pkl')
+
+    with open(path, 'rb') as f:
+        splits = pickle.load(f)[seed]
+    
+    valid_names, test_names = splits['valid_names'], splits['test_names']
+    data_path = './dataset'
+    path = os.path.join(data_path, 'FC_Fisher_Z_transformed.pkl')
+    with open(path, 'rb') as f:
+        data_FC = pickle.load(f)
+
+    path = os.path.join(data_path, 'SC.pkl')
+    with open(path, 'rb') as f:
+        data_SC = pickle.load(f)
+
+    path = os.path.join(data_path, 'T1.pkl')
+    with open(path, 'rb') as f:
+        data_raw_X = pickle.load(f)
+
+    path = os.path.join(data_path, 'demo.pkl')
+    with open(path, 'rb') as f:
+        data_labels = pickle.load(f)
+    
+    # NOTE note that only data_SC has full keys, is it a semi-supervised task?
+    ## we only take graph which have labels and both SC, FC modalities.
+    all_keys = np.unique(list(data_SC.keys()) + list(data_FC.keys()) + list(data_labels.keys()))
+    data_size = len(all_keys)
+    adjs = torch.zeros((data_size, 2, 200, 200))
+    labels = torch.zeros(data_size)
+    raw_Xs = torch.zeros((data_size, 200, 9))
+    no_sc_idx, no_fc_idx, no_lbl_idx = \
+        torch.zeros(data_size, dtype=torch.bool), \
+        torch.zeros(data_size, dtype=torch.bool), \
+        torch.zeros(data_size, dtype=torch.bool)
+    mask = []
+    train_idx, valid_idx, test_idx = \
+        torch.zeros(data_size, dtype=torch.bool), \
+        torch.zeros(data_size, dtype=torch.bool), \
+        torch.zeros(data_size, dtype=torch.bool)
+    
+    for i, name in tqdm(enumerate(all_keys)):
+        # valid and test set are pre-specified
+        if name in valid_names:
+            valid_idx[i] = True
+            labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
+            
+        elif name in test_names:
+            test_idx[i] = True
+            labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
+            
+        else: # train set is built here to incorporate more special graphs (missing layers / labels)
+            if name not in data_raw_X.keys():
+                continue
+            if name not in data_labels.keys() or 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
+                if '_miss_label' in file_option:
+                    labels[i] = 0.
+                    no_lbl_idx[i] = True
+                else:
+                    continue
+            else:
+                labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
+            
+            if name not in data_SC.keys():
+                if '_miss_graph' in file_option:
+                    adjs[i, 0] = torch.zeros(200, 200)
+                    no_sc_idx[i] = True
+                else:
+                    continue
+            else:
+                adjs[i, 0] = torch.tensor(data_SC[name])
+
+            if name not in data_FC.keys():
+                if '_miss_graph' in file_option:
+                    adjs[i, 1] = torch.zeros(200, 200)
+                    no_fc_idx[i] = True
+                else:
+                    continue
+            else:
+                adjs[i, 1] = torch.tensor(data_FC[name])
+            train_idx[i] = True
+
+        raw_X = data_raw_X[name].drop(columns=['StructName'])
+        raw_X = raw_X.to_numpy().astype(float)
+        raw_Xs[i] = torch.tensor(raw_X)
+
+        mask.append(i)
+
+    adjs = adjs[mask]
+    labels = labels[mask]
+    raw_Xs = raw_Xs[mask]
+    no_sc_idx = no_sc_idx[mask]
+    no_fc_idx = no_fc_idx[mask]
+    no_lbl_idx = no_lbl_idx[mask]
+    train_idx, valid_idx, test_idx = \
+        train_idx[mask], valid_idx[mask], test_idx[mask]
+
+    mu_lbls, std_lbls = None, None
+    if label_type == 'classification':
+        labels_class = torch.zeros_like(labels, dtype=torch.long)
+        for i, label in enumerate(labels.unique()):
+            labels_class[labels == label] = i
+        labels = labels_class
+
+    else:
+        if '_miss_label' not in file_option:
+            mu_lbls, std_lbls = labels.mean(), labels.std()
+            labels = (labels - mu_lbls) / std_lbls
+            
+    
+    batchnorm = nn.BatchNorm1d(raw_Xs.shape[-1], affine=False)
+    layernorm = nn.LayerNorm([adjs.shape[-2], adjs.shape[-1]], elementwise_affine=False)
+
+    original_feat_shape = raw_Xs.shape
+    raw_Xs = batchnorm(
+        raw_Xs.reshape(-1, raw_Xs.shape[-1])
+    ).reshape(original_feat_shape)
+
+    original_adjs_shape = adjs.shape
+    adjs = layernorm(
+        adjs.reshape(-1, adjs.shape[-2], adjs.shape[-1])
+    ).reshape(original_adjs_shape)
+
+    assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
+
+    if online_split:
+        train_idx, valid_idx, test_idx = \
+            torch.zeros(data_size, dtype=torch.bool), \
+            torch.zeros(data_size, dtype=torch.bool), \
+            torch.zeros(data_size, dtype=torch.bool)
+        if eval_type == 'split':
+            train_size, valid_size, test_size = \
+                split_args['train_size'], split_args['valid_size'], split_args['test_size']
+            idx = np.arange(len(labels))
+            _train_valid_idx, _test_idx = \
+                train_test_split(idx, test_size=test_size)
+            _train_idx, _valid_idx = \
+                train_test_split(_train_valid_idx, 
+                                test_size=valid_size / (train_size + valid_size))
+            train_idx[_train_idx], valid_idx[_valid_idx], test_idx[_test_idx] = \
+                True, True, True
+        elif eval_type == 'cross':
+            kfold = KFold(n_splits=5, shuffle=True)
+            splits = list(kfold.split(X=idx))
+
+    if not online_split:
+        assert valid_idx.sum() == test_idx.sum() == 75
+
+    splits = {
+        'train_idx': train_idx,
+        'valid_idx': valid_idx,
+        'test_idx': test_idx,
+    }
+
+    if file_option == "_miss_graph":
+        if not online_split:
+            assert no_sc_idx[valid_idx].sum() == no_sc_idx[test_idx].sum() \
+                == no_fc_idx[valid_idx].sum() == no_fc_idx[test_idx].sum() == 0.
+        return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx
+    elif file_option == "_miss_graph_miss_label":
+        if not online_split:
+            assert no_sc_idx[valid_idx].sum() == no_sc_idx[test_idx].sum() \
+                == no_fc_idx[valid_idx].sum() == no_fc_idx[test_idx].sum() \
+                == no_lbl_idx[valid_idx].sum() == no_lbl_idx[test_idx].sum() == 0.
+        return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx, no_lbl_idx
+    else:
+        return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
+
 def set_random_seed(seed):
     random.seed(seed)
     np.random.seed(seed)

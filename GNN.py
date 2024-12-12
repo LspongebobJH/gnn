@@ -14,7 +14,7 @@ from utils import set_random_seed, load_dataset, model_infer, \
     Evaluator, EarlyStopping, SINGLE_MODALITY_MODELS, \
     FUSE_SINGLE_MODALITY_MODELS, FUSE_SINGLE_MODALITY_MODELS_NOSIA, \
     to_pyg_single, split_pyg, to_pyg_fuse, device, get_fuse_type, \
-    pyg_preprocess_sign
+    pyg_preprocess_sign, load_dataset1
 from torch_geometric.data import Batch
 
 def pipe(configs: dict):
@@ -42,8 +42,13 @@ def pipe(configs: dict):
     online_split = configs.get('online_split', False)
     
     # adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = \
+    # results = \
+    #     load_dataset(split_args=split_args, label_type=label_type, 
+    #                  eval_type=eval_type, reload=reload, 
+    #                  file_option=file_option, seed=seed, 
+    #                  version=valid_test_version, online_split=online_split)
     results = \
-        load_dataset(split_args=split_args, label_type=label_type, 
+        load_dataset1(split_args=split_args, label_type=label_type, 
                      eval_type=eval_type, reload=reload, 
                      file_option=file_option, seed=seed, 
                      version=valid_test_version, online_split=online_split)
@@ -312,7 +317,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     log_idx = 1
-    model_name = 'GCN'
+    model_name = 'MewFuseGraph'
     seed=0
     set_random_seed(seed)
     searchSpace = {
@@ -341,11 +346,11 @@ if __name__ == '__main__':
                 "label_type": "regression",
                 "attn_weight": True, 
                 "shared": False,
-                "reload": True,
+                # "reload": True,
                 # "file_option": "",
                 # "file_option": "_miss_graph",
-                # "file_option": "_miss_graph_miss_label",
-                "file_option": args.file_option,
+                "file_option": "_miss_graph_miss_label",
+                # "file_option": args.file_option,
                 "supp_k": 2,
                 # "fuse_type": "unit_miss",
                 "knn_on": "graph_embed",
@@ -353,8 +358,8 @@ if __name__ == '__main__':
                 "fuse_method": "GCN",
                 # "add_self_loop": True,
                 # "null_filter": False
-                # "online_split": True
-                "online_split": True if args.online_split == 'True' else False
+                "online_split": False
+                # "online_split": True if args.online_split == 'True' else False
             }
     if searchSpace['use_wandb']:
         run = wandb.init(
