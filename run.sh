@@ -2,10 +2,11 @@
 
 seeds=( {0..9..1} )
 exp="exp_4"
-device=4
-# models=( MHGCN NeuroPath Mew GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed )
+device_st=0
+device_end=7
+models=( MHGCN NeuroPath Mew MewCustom GCN SAGE SGC GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed )
 # models=( MHGCN NeuroPath Mew GCN SAGE SGC GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed )
-models=( MewFuseGraph_fuse_method_GCN_nullFilterFalse MewFuseGraph_fuse_method_SAGE_nullFilterFalse MewFuseGraph_fuse_method_GAT_nullFilterFalse)
+# models=( MewFuseGraph_fuse_method_GCN_nullFilterFalse MewFuseGraph_fuse_method_SAGE_nullFilterFalse MewFuseGraph_fuse_method_GAT_nullFilterFalse)
 # models=( MewFuseGraph_fuse_method_GAT_nullFilterFalse)
 # models=(Mew_custom)
 cnt=0
@@ -20,8 +21,8 @@ for model in "${models[@]}"; do
         # fi
 
         device=$(( device + 1 ))
-        if [ ${device} -eq 8 ]; then
-            device=4
+        if [ ${device} -eq $(( device_end + 1 )) ]; then
+            device=${device_st}
             # wait
         fi
     done
