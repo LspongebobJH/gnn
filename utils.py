@@ -339,7 +339,7 @@ def load_dataset1(label_type='classification', eval_type='split', split_args: di
                 continue
             if name not in data_labels.keys() or 'nih_totalcogcomp_ageadjusted' not in data_labels[name].keys():
                 if '_miss_label' in file_option:
-                    labels[i] = 0.
+                    labels[i] = torch.inf
                     no_lbl_idx[i] = True
                 else:
                     continue
@@ -388,7 +388,10 @@ def load_dataset1(label_type='classification', eval_type='split', split_args: di
         labels = labels_class
 
     else:
-        if '_miss_label' not in file_option:
+        if '_miss_label' in file_option:
+            mu_lbls, std_lbls = labels[~no_lbl_idx].mean(), labels[~no_lbl_idx].std()
+            labels[~no_lbl_idx] = (labels[~no_lbl_idx] - mu_lbls) / std_lbls
+        else:
             mu_lbls, std_lbls = labels.mean(), labels.std()
             labels = (labels - mu_lbls) / std_lbls
             

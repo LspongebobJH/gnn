@@ -22,7 +22,7 @@ class LabelProp(nn.Module):
 
                 labeled_samples = torch.where(~null_mask)[0]
                 # out edges of unlabeled samples are removed to avoid
-                # 
+                # noisy (null) labels as input
                 knn_g = out_subgraph(knn_g, labeled_samples) 
                 knn_n, target_n = knn_g.in_edges(v=torch.where(null_mask)[0])
                 # idx not equivalent to null_mask since some samples 
@@ -42,7 +42,7 @@ class LabelProp(nn.Module):
         lbls1 = self.fusion(lbls, knn_sc, no_lbl_idx)
         lbls2 = self.fusion(lbls, knn_fc, no_lbl_idx)
 
-        mask = ((lbls1 != -1) * (lbls2 != -1))
-        lbls = (lbls1[mask] + lbls2[mask]) / 2.
+        mask = (~torch.isinf(lbls1) * ~torch.isinf(lbls2)) * train_idx
+        lbls[mask] = (lbls1[mask] + lbls2[mask]) / 2.
 
         return lbls, mask

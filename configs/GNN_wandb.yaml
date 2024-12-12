@@ -1,7 +1,7 @@
 program: run_wandb.py
 method: grid
 # name: sweep-mew-fuse-node-embed-on-graph-embed
-name: sweep-MewFuseGraph-NullFilterFalse
+name: sweep-MewFuseGraph-missLabel
 metric:
   goal: minimize
   name: best_val_rmse
@@ -46,7 +46,7 @@ parameters:
   shared:
     values: [true, false]
   file_option:
-    value: _miss_graph
+    value: _miss_graph_miss_label
   supp_k:
     values: [2, 5, 8]
   # fuse_type:
@@ -59,7 +59,3 @@ parameters:
     value: node_embed
   fuse_method:
     values: [GCN, SAGE, GAT]
-  add_self_loop:
-    value: false
-  null_filter:
-    value: false

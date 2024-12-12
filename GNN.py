@@ -39,7 +39,7 @@ def pipe(configs: dict):
     seed = configs.get('seed', 0)
     valid_test_version = configs.get('valid_test_version', 1)
     # online_split = configs.get('online_split', True) # deprecated: we need offline split!
-    online_split = configs.get('online_split', False)
+    online_split = configs.get('online_split', False) # this is default now!
     
     # adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = \
     # results = \
@@ -211,7 +211,8 @@ def pipe(configs: dict):
     best_val_rmse = torch.inf
     best_test_rmse = torch.inf
     cnt = 0
-    ori_labels = labels
+    ori_labels = labels.clone()
+    ori_train_idx = train_idx.clone()
     for epoch in range(epochs):
         model.train()
         if epoch == 1000 and  model_name == 'MHGCN':
@@ -221,7 +222,8 @@ def pipe(configs: dict):
                              raw_Xs=raw_Xs, data=data, 
                              no_sc_idx=no_sc_idx, no_fc_idx=no_fc_idx)
         if "_miss_label" in file_option: # only applicable to MewFuseGraph now
-            labels = ori_labels # TODO: valid test labels cannot be propagated
+            labels = ori_labels.clone()
+            train_idx = ori_train_idx.clone()
             labels, train_idx = label_prop(labels, no_lbl_idx, model.knn_sc, model.knn_fc, train_idx)
         loss = loss_fn(logits[train_idx], labels[train_idx])
         optimizer.zero_grad()
@@ -325,7 +327,7 @@ if __name__ == '__main__':
                 "hid_dim": 2,
                 "lr": 1e-2,
                 "epochs": 2000,
-                "patience": 3,
+                "patience": 10,
                 "wd": 1e-2,
                 "nlayers": 2,
                 # "nlayers": 1,
@@ -358,7 +360,7 @@ if __name__ == '__main__':
                 "fuse_method": "GCN",
                 # "add_self_loop": True,
                 # "null_filter": False
-                "online_split": False
+                # "online_split": False
                 # "online_split": True if args.online_split == 'True' else False
             }
     if searchSpace['use_wandb']:
