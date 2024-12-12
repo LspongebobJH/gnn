@@ -37,13 +37,14 @@ def pipe(configs: dict):
     eval_type = configs.get('eval_type', 'split')
     seed = configs.get('seed', 0)
     valid_test_version = configs.get('valid_test_version', 1)
+    online_split = configs.get('online_split', True)
     
     # adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = \
     results = \
         load_dataset(split_args=split_args, label_type=label_type, 
                      eval_type=eval_type, reload=reload, 
                      file_option=file_option, seed=seed, 
-                     version=valid_test_version)
+                     version=valid_test_version, online_split=online_split)
     no_sc_idx, no_fc_idx = None, None
     if file_option == "":
         adjs, raw_Xs, labels, splits, mu_lbls, std_lbls = results
@@ -213,8 +214,8 @@ def pipe(configs: dict):
                              raw_Xs=raw_Xs, data=data, 
                              no_sc_idx=no_sc_idx, no_fc_idx=no_fc_idx)
         if "_miss_label" in file_option: # only applicable to MewFuseGraph now
-            labels = ori_labels
-            labels = label_prop(labels, no_lbl_idx, model.knn_sc, model.knn_fc)
+            labels = ori_labels # TODO: valid test labels cannot be propagated
+            labels, train_idx = label_prop(labels, no_lbl_idx, model.knn_sc, model.knn_fc, train_idx)
         loss = loss_fn(logits[train_idx], labels[train_idx])
         optimizer.zero_grad()
         loss.backward()
@@ -301,7 +302,7 @@ def pipe(configs: dict):
 
 if __name__ == '__main__':
     log_idx = 1
-    model_name = 'MewFuseGraph'
+    model_name = 'GCN'
     seed=0
     set_random_seed(seed)
     searchSpace = {
@@ -309,7 +310,7 @@ if __name__ == '__main__':
                 "hid_dim": 2,
                 "lr": 1e-2,
                 "epochs": 2000,
-                "patience": -1,
+                "patience": 3,
                 "wd": 1e-2,
                 "nlayers": 2,
                 # "nlayers": 1,
@@ -330,7 +331,7 @@ if __name__ == '__main__':
                 "label_type": "regression",
                 "attn_weight": True, 
                 "shared": False,
-                # "reload": True,
+                "reload": True,
                 # "file_option": "",
                 "file_option": "_miss_graph",
                 # "file_option": "_miss_graph_miss_label",
@@ -339,8 +340,9 @@ if __name__ == '__main__':
                 "knn_on": "graph_embed",
                 "fuse_on": "node_embed",
                 "fuse_method": "GCN",
-                "add_self_loop": True,
-                "null_filter": False
+                # "a¡dd_self_loop": True,
+                # "null_filter": False
+                "online_split": True
             }
     if searchSpace['use_wandb']:
         run = wandb.init(

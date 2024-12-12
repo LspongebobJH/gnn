@@ -55,7 +55,7 @@ def model_infer(model, model_name, **kwargs):
 
 def load_dataset(label_type='classification', eval_type='split', split_args: dict = None, 
                  cross_args: dict = None, reload = False, 
-                 file_option = "", seed=0, version=1):
+                 file_option = "", seed=0, version=1, online_split = True):
     """
 
     label_type: if classification, all labels(int) are converted into its index. If regression, use original values.
@@ -73,7 +73,12 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
     if eval_type == 'split':
         assert split_args is not None
 
-    file_path = f'./dataset/processed_data_{label_type}_{eval_type}{file_option}.pkl'
+    file_path = f'./dataset/processed_data_{label_type}_{eval_type}{file_option}'
+    if online_split:
+        file_path += '_onlineSplit'
+    else:
+        file_path += '_onlineSplitFalse'
+    file_path += '.pkl'
     if os.path.exists(file_path) and not reload:
         print(f"read processed data from {file_path}")
         with open(file_path, 'rb') as f:
@@ -126,15 +131,19 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             torch.zeros(data_size, dtype=torch.bool), \
             torch.zeros(data_size, dtype=torch.bool)
         mask = []
-        train_idx, valid_idx, test_idx = [], [], []
+        train_idx, valid_idx, test_idx = \
+            torch.zeros(data_size, dtype=torch.bool), \
+            torch.zeros(data_size, dtype=torch.bool), \
+            torch.zeros(data_size, dtype=torch.bool)
+        
         for i, name in tqdm(enumerate(all_keys)):
             # valid and test set are pre-specified
             if name in valid_names:
-                valid_idx.append(i)
+                valid_idx[i] = True
                 labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
                 
             elif name in test_names:
-                test_idx.append(i)
+                test_idx[i] = True
                 labels[i] = float(data_labels[name]['nih_totalcogcomp_ageadjusted'])
                 
             else: # train set is built here to incorporate more special graphs (missing layers / labels)
@@ -166,7 +175,7 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
                         continue
                 else:
                     adjs[i, 1] = torch.tensor(data_FC[name])
-                train_idx.append(i)
+                train_idx[i] = True
 
             raw_X = data_raw_X[name].drop(columns=['StructName'])
             raw_X = raw_X.to_numpy().astype(float)
@@ -174,13 +183,14 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
 
             mask.append(i)
 
-        assert len(valid_idx) == len(test_idx) == 75
         adjs = adjs[mask]
         labels = labels[mask]
         raw_Xs = raw_Xs[mask]
         no_sc_idx = no_sc_idx[mask]
         no_fc_idx = no_fc_idx[mask]
         no_lbl_idx = no_lbl_idx[mask]
+        train_idx, valid_idx, test_idx = \
+            train_idx[mask], valid_idx[mask], test_idx[mask]
 
         mu_lbls, std_lbls = None, None
         if label_type == 'classification':
@@ -226,28 +236,38 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
             pickle.dump(data, f)
 
         assert (adjs == torch.transpose(adjs, 2, 3)).all().item(), "adj matrices are not symmetric"
-
-    if eval_type == 'split':
-        train_size, valid_size, test_size = \
-            split_args['train_size'], split_args['valid_size'], split_args['test_size']
-        idx = np.arange(len(labels))
-        train_valid_idx, test_idx = \
-            train_test_split(idx, test_size=test_size)
-        train_idx, valid_idx = \
-            train_test_split(train_valid_idx, 
-                            test_size=valid_size / (train_size + valid_size))
+        if online_split:
+            if eval_type == 'split':
+                train_size, valid_size, test_size = \
+                    split_args['train_size'], split_args['valid_size'], split_args['test_size']
+                idx = np.arange(len(labels))
+                train_valid_idx, test_idx = \
+                    train_test_split(idx, test_size=test_size)
+                train_idx, valid_idx = \
+                    train_test_split(train_valid_idx, 
+                                    test_size=valid_size / (train_size + valid_size))
+            elif eval_type == 'cross':
+                kfold = KFold(n_splits=5, shuffle=True)
+                splits = list(kfold.split(X=idx))
         splits = {
-            'train_idx': train_idx,
-            'valid_idx': valid_idx,
-            'test_idx': test_idx,
-        }
-    elif eval_type == 'cross':
-        kfold = KFold(n_splits=5, shuffle=True)
-        splits = list(kfold.split(X=idx))
+                    'train_idx': train_idx,
+                    'valid_idx': valid_idx,
+                    'test_idx': test_idx,
+                }
+
+    if not online_split:
+        assert valid_idx.sum() == test_idx.sum() == 75
 
     if file_option == "_miss_graph":
+        if not online_split:
+            assert no_sc_idx[valid_idx].sum() == no_sc_idx[test_idx].sum() \
+                == no_fc_idx[valid_idx].sum() == no_fc_idx[test_idx].sum() == 0.
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx
     elif file_option == "_miss_graph_miss_label":
+        if not online_split:
+            assert no_sc_idx[valid_idx].sum() == no_sc_idx[test_idx].sum() \
+                == no_fc_idx[valid_idx].sum() == no_fc_idx[test_idx].sum() \
+                == no_lbl_idx[valid_idx].sum() == no_lbl_idx[test_idx].sum() == 0.
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx, no_lbl_idx
     else:
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
