@@ -1,7 +1,7 @@
 #!/bin/bash
 
 seeds=( {0..9..1} )
-exp="exp_4"
+exp="exp_5"
 device_st=0
 device_end=7
 models=( MHGCN NeuroPath Mew MewCustom GCN SAGE SGC GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed )
