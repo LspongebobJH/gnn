@@ -24,7 +24,7 @@ for model in "${models[@]}"; do
         device=$(( device + 1 ))
         if [ ${device} -eq $(( device_end + 1 )) ]; then
             device=${device_st}
-            wait
+            # wait
         fi
     done
     wait
