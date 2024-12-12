@@ -64,7 +64,9 @@ def pipe(configs: dict):
         no_sc_idx = no_sc_idx.to(device)
         no_fc_idx = no_fc_idx.to(device)
         no_lbl_idx = no_lbl_idx.to(device)
-    train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']    
+    train_idx, valid_idx, test_idx = splits['train_idx'], splits['valid_idx'], splits['test_idx']  
+    train_idx, valid_idx, test_idx = \
+        train_idx.to(device), valid_idx.to(device), test_idx.to(device)
     in_dim = raw_Xs.shape[-1]
 
     assert label_type in ['classification', 'regression']
