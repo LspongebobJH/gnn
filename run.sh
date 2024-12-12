@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 
 seeds=( {0..9..1} )
 exp="exp_5"
@@ -7,7 +7,7 @@ device_end=7
 # models=( MHGCN NeuroPath Mew MewCustom GCN SAGE SGC GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed )
 # models=( GAT GAT_fuse_embed)
 # models=( MHGCN NeuroPath Mew GCN SAGE SGC GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed )
-models=( MewFuseGraph_fuse_method_GCN_missLabel MewFuseGraph_fuse_method_SAGE_missLabel)
+models=( MewFuseGraph_fuse_method_GAT_missLabel)
 # models=( MewFuseGraph_fuse_method_GAT_nullFilterFalse)
 # models=(Mew_custom)
 cnt=0
