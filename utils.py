@@ -88,6 +88,8 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
         labels = data['labels']
         mu_lbls = data['mu_lbls']
         std_lbls = data['std_lbls']
+        train_idx, valid_idx, test_idx = \
+            data['train_idx'], data['valid_idx'], data['train_idx']
         if '_miss_graph' in file_option:
             no_sc_idx = data['no_sc_idx']
             no_fc_idx = data['no_fc_idx']
