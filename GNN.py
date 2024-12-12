@@ -38,7 +38,8 @@ def pipe(configs: dict):
     eval_type = configs.get('eval_type', 'split')
     seed = configs.get('seed', 0)
     valid_test_version = configs.get('valid_test_version', 1)
-    online_split = configs.get('online_split', True)
+    # online_split = configs.get('online_split', True)
+    online_split = configs.get('online_split', False)
     
     # adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = \
     results = \
