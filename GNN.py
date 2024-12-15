@@ -118,6 +118,7 @@ def pipe(configs: dict):
         fuse_method = configs.get('fuse_method', "mean")
         add_self_loop = configs.get('add_self_loop', False)
         null_filter = configs.get('null_filter', True)
+        fusion_only_on_null = configs.get('fusion_only_on_null', False)
 
         model = MewFuseGraph(num_feat=in_dim, num_graph_tasks=out_dim, 
                             num_layer=nlayers, emb_dim=hid_dim, drop_ratio=dropout, 
@@ -125,7 +126,8 @@ def pipe(configs: dict):
                             attn_weight=configs['attn_weight'],
                             shared=configs['shared'], 
                             k=k, knn_on=knn_on, fuse_on=fuse_on, fuse_method=fuse_method, 
-                            gnn_add_self_loop=add_self_loop, null_filter=null_filter)
+                            gnn_add_self_loop=add_self_loop, null_filter=null_filter,
+                            fusion_only_on_null=fusion_only_on_null)
             
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.2)
@@ -362,7 +364,8 @@ if __name__ == '__main__':
                 "knn_on": "graph_embed",
                 "fuse_on": "node_embed",
                 "fuse_method": "GCN",
-                "label_prop": False
+                "label_prop": False,
+                "fusion_only_on_null": True,
                 # "add_self_loop": True,
                 # "null_filter": False
                 # "online_split": False

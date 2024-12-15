@@ -18,7 +18,7 @@ from .mew_custom import SIGNv2Custom, knn_graph
 class MewFuseGraph(SIGN_pred):
     def __init__(self, num_layer, num_feat, emb_dim, drop_ratio, shared, 
                  k=None, knn_on="graph_embed", fuse_on='graph_embed', fuse_method="mean",
-                 gnn_add_self_loop=False, null_filter=True,
+                 gnn_add_self_loop=False, null_filter=True, fusion_only_on_null=False,
                  *args, **kwargs):
         super().__init__(num_layer, num_feat, emb_dim, drop_ratio=drop_ratio, shared=shared, *args, **kwargs)
         self.k = k
@@ -32,6 +32,7 @@ class MewFuseGraph(SIGN_pred):
         self.dropout = nn.Dropout(drop_ratio)
 
         self.knn_sc, self.knn_fc = None, None
+        self.fusion_only_on_null = fusion_only_on_null
 
         self.simple_prim = ['mean', 'sum', 'min', 'max']
         self.gnn_dict = {
@@ -158,11 +159,25 @@ class MewFuseGraph(SIGN_pred):
         node_embed_2 = self.sign2(adjs[:, 1], feats) # cell_type
 
         knn_g = self.build_knn_graph(node_embed_basis=node_embed_2, batch=batch, null_mask=no_sc_idx)
-        embed1 = self.fusion(node_embed_1, knn_g, batch, no_sc_idx, num_graphs, num_nodes)
+        _embed1 = self.fusion(node_embed_1, knn_g, batch, no_sc_idx, num_graphs, num_nodes)
+        if self.fusion_only_on_null:
+            _node_embed_1 = node_embed_1.reshape(num_graphs, num_nodes, -1)
+            embed1 = torch.zeros_like(_node_embed_1)
+            embed1[~no_sc_idx] = _node_embed_1[~no_sc_idx]
+            embed1[no_sc_idx] = _embed1[no_sc_idx]
+        else:
+            embed1 = _embed1
         self.knn_sc = knn_g
         
         knn_g = self.build_knn_graph(node_embed_basis=node_embed_1, batch=batch, null_mask=no_fc_idx)
-        embed2 = self.fusion(node_embed_2, knn_g, batch, no_fc_idx, num_graphs, num_nodes)
+        _embed2 = self.fusion(node_embed_2, knn_g, batch, no_fc_idx, num_graphs, num_nodes)
+        if self.fusion_only_on_null:
+            _node_embed_2 = node_embed_2.reshape(num_graphs, num_nodes, -1)
+            embed2 = torch.zeros_like(_node_embed_2)
+            embed2[~no_fc_idx] = _node_embed_2[~no_fc_idx]
+            embed2[no_fc_idx] = _embed2[no_fc_idx]
+        else:
+            embed2 = _embed2
         self.knn_fc = knn_g
 
         graph_embed = self.gen_graph_embed(embed1, embed2, batch, num_graphs, num_nodes)
