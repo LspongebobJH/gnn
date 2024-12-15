@@ -40,6 +40,7 @@ def pipe(configs: dict):
     valid_test_version = configs.get('valid_test_version', 1)
     # online_split = configs.get('online_split', True) # deprecated: we need offline split!
     online_split = configs.get('online_split', False) # this is default now!
+    label_prop_option = configs.get('label_prop', False)
     
     # adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = \
     # results = \
@@ -49,8 +50,7 @@ def pipe(configs: dict):
     #                  version=valid_test_version, online_split=online_split)
     results = \
         load_dataset1(split_args=split_args, label_type=label_type, 
-                     eval_type=eval_type, reload=reload, 
-                     file_option=file_option, seed=seed, 
+                     eval_type=eval_type, file_option=file_option, seed=seed, 
                      version=valid_test_version, online_split=online_split)
     no_sc_idx, no_fc_idx = None, None
     if file_option == "":
@@ -192,7 +192,7 @@ def pipe(configs: dict):
     loading label propagation model
     """
 
-    if "_miss_label" in file_option:
+    if label_prop_option:
         label_prop = LabelProp()
     """
     loading label propagation model - end
@@ -214,6 +214,8 @@ def pipe(configs: dict):
     best_test_rmse = torch.inf
     cnt = 0
     ori_labels = labels.clone()
+    if '_miss_label' in file_option and not label_prop_option:
+        train_idx = train_idx * ~no_lbl_idx # only labeled data being computed loss against labels
     ori_train_idx = train_idx.clone()
     for epoch in range(epochs):
         model.train()
@@ -223,7 +225,7 @@ def pipe(configs: dict):
         logits = model_infer(model, model_name, adjs=adjs,
                              raw_Xs=raw_Xs, data=data, 
                              no_sc_idx=no_sc_idx, no_fc_idx=no_fc_idx)
-        if "_miss_label" in file_option: # only applicable to MewFuseGraph now
+        if label_prop_option:
             labels = ori_labels.clone()
             train_idx = ori_train_idx.clone()
             labels, train_idx = label_prop(labels, no_lbl_idx, model.knn_sc, model.knn_fc, train_idx)
@@ -360,6 +362,7 @@ if __name__ == '__main__':
                 "knn_on": "graph_embed",
                 "fuse_on": "node_embed",
                 "fuse_method": "GCN",
+                "label_prop": False
                 # "add_self_loop": True,
                 # "null_filter": False
                 # "online_split": False

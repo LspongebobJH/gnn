@@ -265,8 +265,7 @@ def load_dataset(label_type='classification', eval_type='split', split_args: dic
     else:
         return adjs, raw_Xs, labels, splits, mu_lbls, std_lbls
 
-def load_dataset1(label_type='classification', eval_type='split', split_args: dict = None, 
-                 cross_args: dict = None, reload = False, 
+def load_dataset1(label_type='classification', eval_type='split', split_args: dict = None,
                  file_option = "", seed=0, version=1, online_split = True):
     """
 
@@ -307,8 +306,6 @@ def load_dataset1(label_type='classification', eval_type='split', split_args: di
     with open(path, 'rb') as f:
         data_labels = pickle.load(f)
     
-    # NOTE note that only data_SC has full keys, is it a semi-supervised task?
-    ## we only take graph which have labels and both SC, FC modalities.
     all_keys = np.unique(list(data_SC.keys()) + list(data_FC.keys()) + list(data_labels.keys()))
     data_size = len(all_keys)
     adjs = torch.zeros((data_size, 2, 200, 200))
