@@ -6,7 +6,7 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 from argparse import ArgumentParser
 
-from MHGCN_src import MHGCN
+from MHGCN_src import MHGCN, MHGCNFuseGraph
 from NeuroPath_src import DetourTransformer, Transformer, GAT, Vanilla
 from custom_src import VanillaFuse, GATFuse, VanillaFuseNoSia, GATFuseNoSia, \
     SIGN_pred, MewCustom, MewFuseGraph, LabelProp
@@ -114,7 +114,7 @@ def pipe(configs: dict):
 
         k = configs.get('supp_k', 5)
         knn_on = configs.get('knn_on', "graph_embed")
-        fuse_on = configs.get('fuse_on', "graph_embed")
+        fuse_on = configs.get('fuse_on', "node_embed") # the best option
         fuse_method = configs.get('fuse_method', "mean")
         add_self_loop = configs.get('add_self_loop', False)
         null_filter = configs.get('null_filter', True)
@@ -128,6 +128,20 @@ def pipe(configs: dict):
                             k=k, knn_on=knn_on, fuse_on=fuse_on, fuse_method=fuse_method, 
                             gnn_add_self_loop=add_self_loop, null_filter=null_filter,
                             fusion_only_on_null=fusion_only_on_null)
+    elif model_name == 'MHGCNFuseGraph':
+        adjs = adjs.to(device)
+        raw_Xs = raw_Xs.to(device)
+
+        k = configs.get('supp_k', 5)
+        knn_on = configs.get('knn_on', "graph_embed")
+        fuse_on = configs.get('fuse_on', "node_embed")
+        fuse_method = configs.get('fuse_method', "mean")
+
+        model = MHGCNFuseGraph(nfeat=in_dim, nlayers=nlayers, nhid=hid_dim, out=out_dim, 
+                               dropout=dropout, k=k, fuse_method=fuse_method, 
+                               knn_on=knn_on, fuse_on=fuse_on, 
+                               shared=configs['shared'],
+                               combine_type=configs['combine_type'])
             
     elif model_name in ['NeuroPath'] + SINGLE_MODALITY_MODELS:
         ratio_sc = configs.get('ratio_sc', 0.2)
@@ -325,7 +339,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     log_idx = 1
-    model_name = 'MewFuseGraph'
+    model_name = 'MHGCNFuseGraph'
     seed=0
     set_random_seed(seed)
     searchSpace = {
@@ -366,6 +380,7 @@ if __name__ == '__main__':
                 "fuse_method": "GCN",
                 "label_prop": False,
                 "fusion_only_on_null": True,
+                "combine_type": "elementwise",
                 # "add_self_loop": True,
                 # "null_filter": False
                 # "online_split": False

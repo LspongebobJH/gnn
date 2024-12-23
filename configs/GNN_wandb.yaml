@@ -1,7 +1,7 @@
 program: run_wandb.py
 method: grid
 # name: sweep-mew-fuse-node-embed-on-graph-embed
-name: sweep-MewFuseGraph-missLabel-labelPropFalse-fusionOnlyOnNull
+name: sweep-MHGCNFuseGraph
 metric:
   goal: minimize
   name: best_val_rmse
@@ -28,7 +28,7 @@ parameters:
   use_wandb:
     value: true
   model_name:
-    value: MewFuseGraph
+    value: MHGCNFuseGraph
   # modality:
   #   values: [sc, fc]
   # ratio:
@@ -41,8 +41,10 @@ parameters:
     value: mean
   # reduce_fuse:
   #   values: [mean, concat, sum]
-  attn_weight:
-    values: [true, false]
+  # attn_weight:
+  #   values: [true, false]
+  combine_type:
+    values: ["attn_weight", "attn_no_weight", "elementwise", "global"]
   shared:
     values: [true, false]
   file_option:
@@ -59,7 +61,7 @@ parameters:
     value: node_embed
   fuse_method:
     values: [GCN, SAGE, GAT]
-  label_prop:
-    value: False
-  fusion_only_on_null:
-    value: True
+  # label_prop:
+  #   value: False
+  # fusion_only_on_null:
+  #   value: True

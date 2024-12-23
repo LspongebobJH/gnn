@@ -17,7 +17,7 @@ from .mew_custom import SIGNv2Custom, knn_graph
 
 class MewFuseGraph(SIGN_pred):
     def __init__(self, num_layer, num_feat, emb_dim, drop_ratio, shared, 
-                 k=None, knn_on="graph_embed", fuse_on='graph_embed', fuse_method="mean",
+                 k=None, knn_on="graph_embed", fuse_on='node_embed', fuse_method="mean",
                  gnn_add_self_loop=False, null_filter=True, fusion_only_on_null=False,
                  *args, **kwargs):
         super().__init__(num_layer, num_feat, emb_dim, drop_ratio=drop_ratio, shared=shared, *args, **kwargs)

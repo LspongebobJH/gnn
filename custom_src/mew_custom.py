@@ -5,13 +5,7 @@ from torch_scatter import scatter
 import numpy as np
 
 from .mew import SIGN_pred, SIGN_v2
-
-from dgl import DGLError, remove_self_loop, remove_edges, EID
-from dgl.base import dgl_warning
-from dgl.transforms.functional import pairwise_squared_distance
-from dgl.sampling import sample_neighbors
-from dgl.transforms.functional import convert
-import dgl.backend as dglF
+from utils import knn_graph
 
 
 class SIGNv2Custom(SIGN_v2):
@@ -203,100 +197,3 @@ class MewCustom(SIGN_pred):
             graph_pred = self.graph_pred_module(graph_embed)
 
         return graph_pred
-    
-"""
-adapted from dgl.knn_graph, but add some constraints
-"""
-
-def knn_graph(
-    x, null_idx, k, algorithm="bruteforce-blas", dist="euclidean", exclude_self=False, null_filter=True
-):
-    """
-    null_filter: if true, when constructing similarity matrix, similarity items between null graphs will
-        be set to inf so that null graphs are not connected. this is to prevent noises of null graphs being
-        propagated to other null graphs.
-    """
-    if exclude_self:
-        # add 1 to k, for the self edge, since it will be removed
-        k = k + 1
-
-    # check invalid k
-    if k <= 0:
-        raise DGLError("Invalid k value. expect k > 0, got k = {}".format(k))
-
-    # check empty point set
-    x_size = tuple(dglF.shape(x))
-    if x_size[0] == 0:
-        raise DGLError("Find empty point set")
-
-    d = dglF.ndim(x)
-    x_seg = x_size[0] * [x_size[1]] if d == 3 else [x_size[0]]
-    if algorithm == "bruteforce-blas":
-        result = _knn_graph_blas(x, null_idx, k, dist=dist, null_filter=null_filter)
-
-    if exclude_self:
-        # remove_self_loop will update batch_num_edges as needed
-        result = remove_self_loop(result)
-
-        # If there were more than k(+1) coincident points, there may not have been self loops on
-        # all nodes, in which case there would still be one too many out edges on some nodes.
-        # However, if every node had a self edge, the common case, every node would still have the
-        # same degree as each other, so we can check that condition easily.
-        # The -1 is for the self edge removal.
-        clamped_k = min(k, np.min(x_seg)) - 1
-        if result.num_edges() != clamped_k * result.num_nodes():
-            # edges on any nodes with too high degree should all be length zero,
-            # so pick an arbitrary one to remove from each such node
-            degrees = result.in_degrees()
-            node_indices = dglF.nonzero_1d(degrees > clamped_k)
-            edges_to_remove_graph = sample_neighbors(
-                result, node_indices, 1, edge_dir="in"
-            )
-            edge_ids = edges_to_remove_graph.edata[EID]
-            result = remove_edges(result, edge_ids)
-
-    return result
-
-
-
-def _knn_graph_blas(x, null_idx, k, dist="euclidean", null_filter=True):
-    if dglF.ndim(x) == 2:
-        x = dglF.unsqueeze(x, 0)
-    n_samples, n_points, _ = dglF.shape(x)
-
-    if k > n_points:
-        dgl_warning(
-            "'k' should be less than or equal to the number of points in 'x'"
-            "expect k <= {0}, got k = {1}, use k = {0}".format(n_points, k)
-        )
-        k = n_points
-
-    # if use cosine distance, normalize input points first
-    # thus we can use euclidean distance to find knn equivalently.
-    if dist == "cosine":
-        l2_norm = lambda v: dglF.sqrt(dglF.sum(v * v, dim=2, keepdims=True))
-        x = x / (l2_norm(x) + 1e-5)
-
-    ctx = dglF.context(x)
-    dist = pairwise_squared_distance(x)
-    # Jiahang: revise such that null graphs not in neighbors
-    if null_filter:
-        null_idx_2d = (null_idx.unsqueeze(-1).float() @ null_idx.unsqueeze(0).float()).bool()
-        dist[:, null_idx_2d] = torch.inf
-        dist[:, null_idx, null_idx] = 0.
-
-    k_indices = dglF.astype(dglF.argtopk(dist, k, 2, descending=False), dglF.int64)
-    # index offset for each sample
-    offset = dglF.arange(0, n_samples, ctx=ctx) * n_points
-    offset = dglF.unsqueeze(offset, 1)
-    src = dglF.reshape(k_indices, (n_samples, n_points * k))
-    src = dglF.unsqueeze(src, 0) + offset
-    dst = dglF.repeat(dglF.arange(0, n_points, ctx=ctx), k, dim=0)
-    dst = dglF.unsqueeze(dst, 0) + offset
-    return convert.graph((dglF.reshape(src, (-1,)), dglF.reshape(dst, (-1,))))
-            
-            
-        
-        
-
-
