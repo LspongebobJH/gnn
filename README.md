@@ -57,6 +57,25 @@ run("MewFuseGraph_fuse_method_mean")
 run("${model}")
 ```
 
+# Experiment results
+All numbers are mean and std of 10 repeated experiments across seeds 0 ~ 9, which should be reproduced by commands above.
+
+| Model Name                                        | Mean ± Std     |
+|---------------------------------------------------|-----------------|
+| MewFuseGraph on all data (GNN)                    | 16.24 ± 1.19    |
+| MHGCN                                             | 16.26 ± 1.21    |
+| MewFuseGraph on labeled data (GNN)                | 16.26 ± 1.19    |
+| NeuroPath                                        | 16.28 ± 1.20    |
+| MewFuseGraph on labeled data (mean)               | 16.29 ± 1.21    |
+| Mew                                               | 16.31 ± 1.18    |
+| SAGE_fuse_embed                                   | 16.41 ± 1.25    |
+| SAGE                                              | 16.50 ± 1.37    |
+| SGC_fuse_embed                                    | 16.58 ± 1.28    |
+| SGC                                               | 16.78 ± 1.02    |
+| GCN_fuse_embed                                    | 16.79 ± 1.15    |
+| GCN                                               | 19.07 ± 0.96    |
+| GAT                                               | 19.10 ± 4.43    |
+| GAT_fuse_embed                                    | 21.13 ± 13.39   |
 
 # File structure
 There are some file and folders not listed below since they are unimportant or deprecated for experiments.
