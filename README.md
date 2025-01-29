@@ -61,8 +61,9 @@ run("${model}")
 
 # Experiment results
 All numbers are mean and std of 10 repeated experiments across seeds 0 ~ 9, which should be reproduced by commands above.
+* !Note! It seems than GAT has better performance than GAT_fuse_embed. In fact, by comparing model performance seed by seed, most seeds of GAT_fuse_embed are better than GAT, while there's one particular seed with RMSE 59. This might be outlier. We can conduct more experiments or simply remove outliers from experiments for more fair comparison.
 
-| Model Name                                        | Mean ± Std     |
+| Model Name                                        | Mean ± Std RMSE     |
 |---------------------------------------------------|-----------------|
 | MewFuseGraph on all data (GNN)                    | 16.24 ± 1.19    |
 | MHGCN                                             | 16.26 ± 1.21    |
