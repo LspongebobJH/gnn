@@ -33,6 +33,8 @@ run() {
     done
 }
 
+run(GCN)
+
 # e.g. Run a hyperparameter tuning sweep
 CUDA_VISIBLE_DEVICES=0 python run_wandb.py --wandb sweep --config ./configs/GNN_wandb.yaml --project_name multiplex-tune --seed 0
 ```
