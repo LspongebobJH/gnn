@@ -1,3 +1,4 @@
+# README
 # Install packages
 * pytorch==2.3.0
 * dgl==2.2.0
@@ -7,7 +8,11 @@
 * wandb==0.18.7
 * scikit-learn==1.4.0
 
-# How to run
+# How to prepare valid-test splits
+1. store original data in `dataset/`, including `demo.pkl`, `FC_Fisher_Z_transformed.pkl`, `SC.pkl` and `T1.pkl`.
+2. generate valid and test splits over 0 ~ 9 seeds stored in `dataset/valid_test_split/v1.pkl` by executing `python gen_valid_test.py`.
+
+# How to run experiments
 
 * device: specify which cuda device that model is trained on
 * config: specify hyperparameters of model training
@@ -92,16 +97,16 @@ There are some file and folders not listed below since they are unimportant or d
 ├── MHGCN_src: utils for MHGCN, adapted from (https://github.com/NSSSJSS/MHGCN)
 ├── NeuroPath_src: utils for NeuroPath, adapted from (https://github.com/Chrisa142857/neuro_detour)
 ├── README.md
-├── configs: config files
+├── configs/: config files
 │   ├── *_best.yaml: best hyperparameter setting based on tuning sweep results
 │   ├── *_wandb.yaml: custom config files used for wandb hyperparameter tuning
-├── custom_src
+├── custom_src/
 │   ├── __init__.py
 │   ├── fuse_models.py: implement multiplex variants of GNN using graph, embedding and prediction fusion, where different graph layers share the same learnable parameters.
 │   ├── fuse_models_nosia.py: same as fuse_models.py, with the only difference that different graph layers have different learnable parameters.
 │   ├── mew.py: Implementations of model Mew, adapted from (https://github.com/UNITES-Lab/Mew)
 │   └── mew_fuse_graph.py: integrate graph and embedding fusion modules into Mew, adapted from mew.py
-├── dataset: where original and processed data are stored
+├── dataset/: where original and processed data are stored
 ├── gen_valid_test.py: generate valid and test datasets
 ├── run_wandb.py: the main run file
 ├── requirements.txt
