@@ -15,7 +15,7 @@ device=${device_st}
 model=GCN
 seeds=( {0..9..1} )
 for seed in "${seeds[@]}"; do
-    CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name multiplex-reproduce-1 --seed $seed --save_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
+    CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name multiplex-reproduce-2 --seed $seed --save_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
 
     device=$(( device + 1 ))
     if [ ${device} -eq $(( device_end + 1 )) ]; then
