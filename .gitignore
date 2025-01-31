@@ -166,3 +166,4 @@ papers/
 wandb/
 results/
 logs/
+checkpoints/

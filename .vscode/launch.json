@@ -5,6 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "run_wandb.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "run_wandb.py",
+            "console": "integratedTerminal",
+            "args": ["--wandb", "normal", "--config", "configs/GCN_best.yaml",  "--project_name", "local_multiplex_test", "--seed", "0",
+            // "--save_checkpoint", 
+            "--load_checkpoint", 
+            "--checkpoint_path", 
+            "checkpoints/GCN/seed=0.pkl"]
+        },
+        {
             "name": "GNN.py",
             "type": "debugpy",
             "request": "launch",

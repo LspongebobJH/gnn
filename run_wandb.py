@@ -35,6 +35,9 @@ if __name__ == '__main__':
     parser.add_argument('--wandb', type=str, choices=['sweep', 'normal', 'repeat'])
     parser.add_argument('--config', type=str, default='./configs/GNN.yaml')
     parser.add_argument('--project_name', type=str, default='graph_test')
+    parser.add_argument('--save_checkpoint', action='store_true', default=False)
+    parser.add_argument('--load_checkpoint', action='store_true', default=False)
+    parser.add_argument('--checkpoint_path', type=str, default=None)
     parser.add_argument('--seed', type=int, default=0)
 
     args = parser.parse_args()
@@ -44,6 +47,9 @@ if __name__ == '__main__':
 
     modify_project_name(args.project_name)
     config['seed'] = args.seed
+    config['save_checkpoint'] = args.save_checkpoint
+    config['load_checkpoint'] = args.load_checkpoint
+    config['checkpoint_path'] = args.checkpoint_path
 
     if args.wandb == 'sweep':
         sweep_id = wandb.sweep(sweep=config, project=project_name)

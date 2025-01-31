@@ -41,7 +41,9 @@ def pipe(configs: dict):
     # online_split = configs.get('online_split', True) # deprecated: we need offline split!
     online_split = configs.get('online_split', False) # this is default now!
     label_prop_option = configs.get('label_prop', False)
-    
+    load_checkpoint = configs.get('load_checkpoint', False)
+    save_checkpoint = configs.get('save_checkpoint', False)
+    checkpoint_path = configs.get('checkpoint_path', None)
     # adjs, raw_Xs, labels, splits, mu_lbls, std_lbls, no_sc_idx, no_fc_idx = \
     # results = \
     #     load_dataset(split_args=split_args, label_type=label_type, 
@@ -233,101 +235,129 @@ def pipe(configs: dict):
     if '_miss_label' in file_option and not label_prop_option:
         train_idx = train_idx * ~no_lbl_idx # only labeled data being computed loss against labels
     ori_train_idx = train_idx.clone()
-    for epoch in range(epochs):
-        model.train()
-        if epoch == 1000 and  model_name == 'MHGCN':
-            for g in optimizer.param_groups:
-                g['lr'] *= 1e-1
-        logits = model_infer(model, model_name, adjs=adjs,
-                             raw_Xs=raw_Xs, data=data, 
-                             no_sc_idx=no_sc_idx, no_fc_idx=no_fc_idx)
-        if label_prop_option:
-            labels = ori_labels.clone()
-            train_idx = ori_train_idx.clone()
-            labels, train_idx = label_prop(labels, no_lbl_idx, model.knn_sc, model.knn_fc, train_idx)
-        loss = loss_fn(logits[train_idx], labels[train_idx])
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
 
-        model.eval()
+    if load_checkpoint: # Evaluation
+        model.load_state_dict(torch.load(checkpoint_path, weights_only=True))
+        logits = model_infer(model, model_name, adjs=adjs,
+                            raw_Xs=raw_Xs, data=data, 
+                            no_sc_idx=no_sc_idx, no_fc_idx=no_fc_idx)
         if label_type == 'classification':
-            train_acc, train_auroc, train_auprc = evaluator.evaluate(logits[train_idx], labels[train_idx])
-            print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train Acc {train_acc:.4f} | Train Auroc {train_auroc:.4f} | "
-                    f"Train Auprc: {train_auprc:.4f}")
+            valid_acc, valid_auroc, valid_auprc = evaluator.evaluate(logits[valid_idx], labels[valid_idx])
+            test_acc, test_auroc, test_auprc = evaluator.evaluate(logits[test_idx], labels[test_idx])
+            print(f"Valid Acc {valid_acc:.4f} | Valid Auroc {valid_auroc:.4f} | Valid Auprc: {valid_auprc:.4f}")
+            print(f"Test Acc {test_acc:.4f} | Test Auroc {test_auroc:.4f} | Test Auprc: {test_auprc:.4f}")
+            
             if use_wandb:
                 wandb.log({
-                    'train_acc': train_acc,
-                    'train_auroc': train_auroc,
-                    'train_auprc': train_auprc,
+                    'valid_acc': valid_acc,
+                    'valid_auroc': valid_auroc,
+                    'valid_auprc': valid_auprc,
+
+                    'test_acc': test_acc,
+                    'test_auroc': test_auroc,
+                    'test_auprc': test_auprc,
                 })
         else:
-            train_rmse = evaluator.evaluate(logits[train_idx], labels[train_idx])
-            print(f"Epoch {epoch:05d} | Loss (calib RMSE) {loss.item():.4f} | Train RMSE {train_rmse:.4f}")
+            valid_rmse = evaluator.evaluate(logits[valid_idx], labels[valid_idx])
+            test_rmse = evaluator.evaluate(logits[test_idx], labels[test_idx])
+
+            print(f"Valid RMSE {valid_rmse:.4f} | Test RMSE {test_rmse:.4f}")
+
             if use_wandb:
                 wandb.log({
-                    'train_rmse': train_rmse,
+                    'valid_rmse': valid_rmse,
+                    'test_rmse': test_rmse,
                 })
 
-        if epoch % 5 == 0:
-            model.eval()
+    else: # Training
+        for epoch in range(epochs):
+            if epoch == 1000 and model_name == 'MHGCN':
+                for g in optimizer.param_groups:
+                    g['lr'] *= 1e-1
+            logits = model_infer(model, model_name, adjs=adjs,
+                                raw_Xs=raw_Xs, data=data, 
+                                no_sc_idx=no_sc_idx, no_fc_idx=no_fc_idx)
+            if label_prop_option:
+                labels = ori_labels.clone()
+                train_idx = ori_train_idx.clone()
+                labels, train_idx = label_prop(labels, no_lbl_idx, model.knn_sc, model.knn_fc, train_idx)
+            loss = loss_fn(logits[train_idx], labels[train_idx])
+
             if label_type == 'classification':
-                valid_acc, valid_auroc, valid_auprc = evaluator.evaluate(logits[valid_idx], labels[valid_idx])
-                test_acc, test_auroc, test_auprc = evaluator.evaluate(logits[test_idx], labels[test_idx])
-                print(f"Valid Acc {valid_acc:.4f} | Valid Auroc {valid_auroc:.4f} | Valid Auprc: {valid_auprc:.4f}")
-                print(f"Test Acc {test_acc:.4f} | Test Auroc {test_auroc:.4f} | Test Auprc: {test_auprc:.4f}")
-                
+                train_acc, train_auroc, train_auprc = evaluator.evaluate(logits[train_idx], labels[train_idx])
+                print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train Acc {train_acc:.4f} | Train Auroc {train_auroc:.4f} | "
+                        f"Train Auprc: {train_auprc:.4f}")
                 if use_wandb:
                     wandb.log({
-                        'valid_acc': valid_acc,
-                        'valid_auroc': valid_auroc,
-                        'valid_auprc': valid_auprc,
-
-                        'test_acc': test_acc,
-                        'test_auroc': test_auroc,
-                        'test_auprc': test_auprc,
+                        'train_acc': train_acc,
+                        'train_auroc': train_auroc,
+                        'train_auprc': train_auprc,
                     })
             else:
-                valid_rmse = evaluator.evaluate(logits[valid_idx], labels[valid_idx])
-                test_rmse = evaluator.evaluate(logits[test_idx], labels[test_idx])
-
-                print(f"Valid RMSE {valid_rmse:.4f} | Test RMSE {test_rmse:.4f}")
-
-                if valid_rmse < best_val_rmse:
-                    best_train_rmse = train_rmse
-                    best_val_rmse = valid_rmse
-                    best_test_rmse = test_rmse
-                    cnt = 0
-                else:
-                    cnt += 1
-
+                train_rmse = evaluator.evaluate(logits[train_idx], labels[train_idx])
+                print(f"Epoch {epoch:05d} | Loss (calib RMSE) {loss.item():.4f} | Train RMSE {train_rmse:.4f}")
                 if use_wandb:
                     wandb.log({
-                        'valid_rmse': valid_rmse,
-                        'test_rmse': test_rmse,
+                        'train_rmse': train_rmse,
                     })
 
-                if cnt >= patience:
-                    break
-    if use_wandb:
-        wandb.log({
-            'best_train_rmse': best_train_rmse,
-            'best_val_rmse': best_val_rmse,
-            'best_test_rmse': best_test_rmse,
-        })
-    return best_train_rmse.item(), best_val_rmse.item(), best_test_rmse.item()
-        # earlystop.step_score(val_acc, model)
-        # print(f"Epoch {epoch:05d} | Loss {loss.item():.4f} | Train Acc {train_acc:.4f} | Val Acc {val_acc:.4f} | "
-        #       f"Test acc: {test_acc:.4f} | Patience: {earlystop.counter}/{patience}")
-        
-        # if earlystop.early_stop:
-        #     print("Early Stopping!")
-        #     break
-    # earlystop.load_model(model)
-    # acc = evaluate(g, feat, labels, test_mask, model)
-    # print("Test accuracy {:.4f}".format(acc))
-    # test_acc_list.append(acc)
-    # return train_acc_list, valid_acc_list, test_acc_list, acc
+            if epoch % 1 == 0:
+                if label_type == 'classification':
+                    valid_acc, valid_auroc, valid_auprc = evaluator.evaluate(logits[valid_idx], labels[valid_idx])
+                    test_acc, test_auroc, test_auprc = evaluator.evaluate(logits[test_idx], labels[test_idx])
+                    print(f"Valid Acc {valid_acc:.4f} | Valid Auroc {valid_auroc:.4f} | Valid Auprc: {valid_auprc:.4f}")
+                    print(f"Test Acc {test_acc:.4f} | Test Auroc {test_auroc:.4f} | Test Auprc: {test_auprc:.4f}")
+                    
+                    if use_wandb:
+                        wandb.log({
+                            'valid_acc': valid_acc,
+                            'valid_auroc': valid_auroc,
+                            'valid_auprc': valid_auprc,
+
+                            'test_acc': test_acc,
+                            'test_auroc': test_auroc,
+                            'test_auprc': test_auprc,
+                        })
+                else:
+                    valid_rmse = evaluator.evaluate(logits[valid_idx], labels[valid_idx])
+                    test_rmse = evaluator.evaluate(logits[test_idx], labels[test_idx])
+
+                    print(f"Valid RMSE {valid_rmse:.4f} | Test RMSE {test_rmse:.4f}")
+
+                    if valid_rmse < best_val_rmse:
+                        best_train_rmse = train_rmse
+                        best_val_rmse = valid_rmse
+                        best_test_rmse = test_rmse
+                        cnt = 0
+
+                        if save_checkpoint:
+                            par = os.path.dirname(checkpoint_path)
+                            if not os.path.exists(par):
+                                os.makedirs(par)
+                            torch.save(model.state_dict(), checkpoint_path)
+                    else:
+                        cnt += 1
+
+                    if use_wandb:
+                        wandb.log({
+                            'valid_rmse': valid_rmse,
+                            'test_rmse': test_rmse,
+                        })
+
+                    if cnt >= patience:
+                        break
+            
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        if use_wandb:
+            wandb.log({
+                'best_train_rmse': best_train_rmse,
+                'best_val_rmse': best_val_rmse,
+                'best_test_rmse': best_test_rmse,
+            })
+        return best_train_rmse.item(), best_val_rmse.item(), best_test_rmse.item()
 
 if __name__ == '__main__':
 

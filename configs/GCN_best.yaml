@@ -1,7 +1,8 @@
 lr: 0.01
 wd: 0.01
 ratio: 0.2
-epochs: 2000
+# epochs: 2000
+epochs: 1
 reduce: mean
 dropout: 0.5
 hid_dim: 128

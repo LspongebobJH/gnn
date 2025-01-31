@@ -1,4 +1,24 @@
 #!/bin/bash
 
-python GNN.py --online_split=False &
-python GNN.py --file_option=_miss_graph --online_split=False &
+# python GNN.py --online_split=False &
+# python GNN.py --file_option=_miss_graph --online_split=False &
+
+# python run_wandb.py --wandb normal --config configs/GCN_best.yaml --project_name local_multiplex_test --seed 0 \
+#     --save_checkpoint --checkpoint_path checkpoints/GCN/seed=0.pkl
+
+# python run_wandb.py --wandb normal --config configs/GCN_best.yaml --project_name local_multiplex_test --seed 0 \
+#     --load_checkpoint --checkpoint_path checkpoints/GCN/seed=0.pkl
+
+device_st=3
+device_end=7
+model=GCN
+seeds=( {0..9..1} )
+for seed in "${seeds[@]}"; do
+    CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name multiplex-reproduce --seed $seed --save_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
+
+    device=$(( device + 1 ))
+    if [ ${device} -eq $(( device_end + 1 )) ]; then
+        device=${device_st}
+        wait
+    fi
+done
