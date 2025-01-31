@@ -301,7 +301,7 @@ def pipe(configs: dict):
                         'train_rmse': train_rmse,
                     })
 
-            if epoch % 1 == 0:
+            if epoch % 5 == 0:
                 if label_type == 'classification':
                     valid_acc, valid_auroc, valid_auprc = evaluator.evaluate(logits[valid_idx], labels[valid_idx])
                     test_acc, test_auroc, test_auprc = evaluator.evaluate(logits[test_idx], labels[test_idx])
