@@ -13,7 +13,7 @@ device_st=3
 device_end=7
 device=${device_st}
 # model=GCN
-models=( SGC SAGE )
+models=( SAGE_fuse_embed GCN_fuse_embed SGC_fuse_embed GAT GAT_fuse_embed MHGCN )
 seeds=( {0..9..1} )
 for seed in "${seeds[@]}"; do
     for model in "${models[@]}"; do
