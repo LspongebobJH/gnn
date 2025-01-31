@@ -12,14 +12,16 @@
 device_st=3
 device_end=7
 device=${device_st}
-model=GCN
+# model=GCN
+models=( SGC SAGE )
 seeds=( {0..9..1} )
 for seed in "${seeds[@]}"; do
-    CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name multiplex-reproduce-2 --seed $seed --save_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
-
-    device=$(( device + 1 ))
-    if [ ${device} -eq $(( device_end + 1 )) ]; then
-        device=${device_st}
-        wait
-    fi
+    for model in "${models[@]}"; do
+        CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name multiplex-reproduce-2 --seed $seed --save_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
+        device=$(( device + 1 ))
+        if [ ${device} -eq $(( device_end + 1 )) ]; then
+            device=${device_st}
+            wait
+        fi
+    done
 done
