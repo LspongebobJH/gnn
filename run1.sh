@@ -11,6 +11,7 @@
 
 device_st=3
 device_end=7
+device=${device_st}
 model=GCN
 seeds=( {0..9..1} )
 for seed in "${seeds[@]}"; do
