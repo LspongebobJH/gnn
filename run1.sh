@@ -13,11 +13,11 @@ device_st=3
 device_end=7
 device=${device_st}
 # model=GCN
-models=( SAGE_fuse_embed GCN_fuse_embed SGC_fuse_embed GAT GAT_fuse_embed MHGCN )
+models=( GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed MHGCN Mew NeuroPath )
 seeds=( {0..9..1} )
 for seed in "${seeds[@]}"; do
     for model in "${models[@]}"; do
-        CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name multiplex-reproduce-2 --seed $seed --save_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
+        CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name multiplex-reproduce-3 --seed $seed --save_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
         device=$(( device + 1 ))
         if [ ${device} -eq $(( device_end + 1 )) ]; then
             device=${device_st}
