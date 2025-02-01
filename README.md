@@ -8,9 +8,10 @@
 * wandb==0.18.7
 * scikit-learn==1.4.0
 
-# How to prepare valid-test splits
-1. store original data in `dataset/`, including `demo.pkl`, `FC_Fisher_Z_transformed.pkl`, `SC.pkl` and `T1.pkl`.
-2. generate valid and test splits over 0 ~ 9 seeds stored in `dataset/valid_test_split/v1.pkl` by executing `python gen_valid_test.py`.
+# Preparation
+1. install wandb through `pip install wandb` and login through `wandb login`. See [Wandb](https://docs.wandb.ai/quickstart/).
+2. store original data in `dataset/`, including `demo.pkl`, `FC_Fisher_Z_transformed.pkl`, `SC.pkl` and `T1.pkl`.
+3. generate valid and test splits over 0 ~ 9 seeds stored in `dataset/valid_test_split/v1.pkl` by executing `python gen_valid_test.py`.
 
 # How to run experiments
 
@@ -50,6 +51,8 @@ CUDA_VISIBLE_DEVICES=0 python run_wandb.py --wandb sweep --config ./configs/GNN_
 # How to reproduce experiments
 All experiments can be reproduced by running following commands and results are shown in wandb with project name "multiplex-gnn". Note that the function `run()` is defined above.
 
+## Train models from scratch
+
 ```bash
 # MewFuseGraph on all data (GNN)
 run("MewFuseGraph_fuse_method_GAT_missLabel_labelPropFalse")
@@ -64,6 +67,20 @@ run("MewFuseGraph_fuse_method_mean")
 run("${model}")
 ```
 
+## Evaluate checkpoints
+
+Testing RMSE of model checkpoints can be obtained through
+
+```bash
+CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name eval --seed $seed --load_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
+```
+
+* For `MewFuseGraph on all data (GNN)`, `${model}` is `MewFuseGraph_fuse_method_GAT_missLabel_labelPropFalse`;
+* For `MewFuseGraph on labeled data (GNN)`, `${model}` is `MewFuseGraph_fuse_method_SAGE`;
+* For `MewFuseGraph on labeled data (mean)`, `${model}` is `MewFuseGraph_fuse_method_mean`;
+* For `model=MHGCN, NeuroPath, Mew, GCN, SAGE, SGC, GAT, {GCN, SAGE, SGC, GAT}_fuse_embed`, `${model}=model`.
+* Results of each seed are shown in running outputs as well as wandb.
+  
 # Experiment results
 All numbers are mean and std of 10 repeated experiments across seeds 0 ~ 9, which should be reproduced by commands above.
 * !Note! It seems than GAT has better performance than GAT_fuse_embed. In fact, by comparing model performance seed by seed, most seeds of GAT_fuse_embed are better than GAT, while there's one particular seed with RMSE 59. This might be outlier. We can conduct more experiments or simply remove outliers from experiments for more fair comparison.
@@ -106,7 +123,8 @@ There are some file and folders not listed below since they are unimportant or d
 │   ├── fuse_models_nosia.py: same as fuse_models.py, with the only difference that different graph layers have different learnable parameters.
 │   ├── mew.py: Implementations of model Mew, adapted from (https://github.com/UNITES-Lab/Mew)
 │   └── mew_fuse_graph.py: integrate graph and embedding fusion modules into Mew, adapted from mew.py
-├── dataset/: where original and processed data are stored
+├── dataset/: storing original and processed data
+├── checkpoints/: storing trained model checkpoints 
 ├── gen_valid_test.py: generate valid and test datasets
 ├── run_wandb.py: the main run file
 ├── requirements.txt
