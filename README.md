@@ -73,14 +73,15 @@ run("${model}")
 * Testing RMSE of model checkpoints can be obtained through
 
 ```bash
-CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name eval --seed $seed --load_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
+CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name eval --seed $seed --load_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl
 ```
 
 * For `MewFuseGraph on all data (GNN)`, `${model}` is `MewFuseGraph_fuse_method_GAT_missLabel_labelPropFalse`;
 * For `MewFuseGraph on labeled data (GNN)`, `${model}` is `MewFuseGraph_fuse_method_SAGE`;
 * For `MewFuseGraph on labeled data (mean)`, `${model}` is `MewFuseGraph_fuse_method_mean`;
 * For `model=MHGCN, NeuroPath, Mew, GCN, SAGE, SGC, GAT, {GCN, SAGE, SGC, GAT}_fuse_embed`, `${model}=model`.
-* Results of each seed are shown in running outputs as well as wandb.
+* Results of each seed will be shown in running outputs as well as wandb.
+* Please noted that, the performance of this experiment corresponds to a single seed of a single model. To obtain the experiment results table as below, you need to evaluate all 10 seeds (0 ~ 9, see `checkpoints/`), and compute the average and std of their RMSE.
   
 # Experiment results
 All numbers are mean and std of 10 repeated experiments across seeds 0 ~ 9, which should be reproduced by commands above.
