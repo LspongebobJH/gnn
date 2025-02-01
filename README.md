@@ -69,7 +69,8 @@ run("${model}")
 
 ## Evaluate checkpoints
 
-Testing RMSE of model checkpoints can be obtained through
+* Google drive link of `checkpoints/`: [checkpoints](https://drive.google.com/file/d/1J5oRsJtYmr0F4jAM73dgYFI3fU1Z8LFg/view?usp=sharing).
+* Testing RMSE of model checkpoints can be obtained through
 
 ```bash
 CUDA_VISIBLE_DEVICES=${device} python run_wandb.py --wandb normal --config configs/${model}_best.yaml --project_name eval --seed $seed --load_checkpoint --checkpoint_path checkpoints/${model}/seed=${seed}.pkl &
