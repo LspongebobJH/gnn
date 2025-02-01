@@ -13,7 +13,8 @@ device_st=3
 device_end=7
 device=${device_st}
 # model=GCN
-models=( GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed MHGCN Mew NeuroPath )
+# models=( GCN SAGE SGC GAT GCN_fuse_embed SAGE_fuse_embed SGC_fuse_embed GAT_fuse_embed MHGCN Mew NeuroPath )
+models=( MewFuseGraph_fuse_method_GAT_missLabel_labelPropFalse MewFuseGraph_fuse_method_SAGE MewFuseGraph_fuse_method_mean)
 seeds=( {0..9..1} )
 for seed in "${seeds[@]}"; do
     for model in "${models[@]}"; do
