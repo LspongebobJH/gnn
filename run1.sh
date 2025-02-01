@@ -9,7 +9,7 @@
 # python run_wandb.py --wandb normal --config configs/GCN_best.yaml --project_name local_multiplex_test --seed 0 \
 #     --load_checkpoint --checkpoint_path checkpoints/GCN/seed=0.pkl
 
-device_st=3
+device_st=0
 device_end=7
 device=${device_st}
 # model=GCN
